@@ -1,3 +1,7 @@
+import os
+
+api_key = os.getenv("API_KEY")
+
 from data import get_data
 from strategy import SimpleModel
 from trader import decide_action

@@ -11,12 +11,13 @@ ai-trading-bot/
 ├── models/
 │   ├── model.pkl
 │
-├── tests/***
+├── tests/*
 │
 ├── requirements.txt
 ├── .env
 ├── Dockerfile
 └── README.md
+
 
 
 

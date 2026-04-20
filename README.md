@@ -1,6 +1,5 @@
 # sai
 
-Repo Structure Start
 ai-trading-bot/
 │
 ├── bot/
@@ -12,12 +11,13 @@ ai-trading-bot/
 ├── models/
 │   ├── model.pkl
 │
-├── tests/
+├── tests/***
 │
 ├── requirements.txt
 ├── .env
 ├── Dockerfile
 └── README.md
+
 
 
 Repo Structure (Expanded)

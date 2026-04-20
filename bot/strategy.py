@@ -1,3 +1,14 @@
+import pickle
+
+# Load model
+with open("models/model.pkl", "rb") as f:
+    model = pickle.load(f)
+
+# Example usage
+features = data_pipeline.get_features()
+prediction = model.predict(features)
+
+
 import numpy as np
 from sklearn.linear_model import LinearRegression
 

@@ -1,5 +1,9 @@
 # bot/main.py
 
+git add bot/main.py
+git commit -m "Add starter main.py with logging and CLI"
+git push
+
 import argparse
 import logging
 import sys

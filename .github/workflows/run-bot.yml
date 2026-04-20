@@ -1,3 +1,6 @@
+- name: Run bot
+  run: python bot/main.py --mode demo
+
 name: Run AI Bot
 
 on:

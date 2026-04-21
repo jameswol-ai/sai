@@ -1,0 +1,5 @@
+{
+  "data_path": "data/backtest_data.csv",
+  "model_path": "models/model.pkl",
+  "log_path": "logs/backtest.json"
+}

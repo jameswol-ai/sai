@@ -1,0 +1,5 @@
+{
+  "data_path": "data/train.csv",
+  "model_path": "models/model.pkl",
+  "log_path": "logs/train.json"
+}

@@ -24,7 +24,7 @@ def run_evaluation_pipeline(config_path: str = "configs/evaluate_config.json"):
 
     # Load test dataset
     df = pd.read_csv(data_path)
-    X_test = df.drop("target", axis=1)
+    X_test = df.drop(["target", "timestamp"], axis=1, errors='ignore')
     y_test = df["target"]
 
     # Load trained model

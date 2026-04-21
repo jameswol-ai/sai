@@ -1,5 +1,6 @@
 # models/pipelines/train_pipeline.py
 import os
+import pandas as pd
 from models.train import train_model
 from models.evaluate import evaluate_model
 from utils import load_config, setup_logger
@@ -16,20 +17,27 @@ def run_training_pipeline(config_path: str = "configs/train_config.json"):
     logger.info(f"Data path: {data_path}")
     logger.info(f"Model output path: {model_path}")
 
+    # Load data
+    df = pd.read_csv(data_path)
+    # Drop timestamp and target columns for features
+    X = df.drop(["target", "timestamp"], axis=1, errors='ignore')
+    y = df["target"]
+
     # Train model
-    model, (X_test, y_test) = train_model(
-        data_path=data_path,
-        model_path=model_path
-    )
+    from models.train import train_model
+    model = train_model(X, y)
     logger.info("Model training complete.")
 
-    # Evaluate model
-    metrics = evaluate_model(model, X_test, y_test)
+    # Evaluate model on training data (for now)
+    from models.evaluate import evaluate_model
+    metrics = evaluate_model(model, X, y)
     logger.info(f"Evaluation metrics: {metrics}")
 
     # Save model
     if not os.path.exists(os.path.dirname(model_path)):
         os.makedirs(os.path.dirname(model_path))
+    import joblib
+    joblib.dump(model, model_path)
     logger.info(f"Model saved to {model_path}")
 
     return metrics

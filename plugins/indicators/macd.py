@@ -1,5 +1,3 @@
-MOVING AVERAGE CONVERGENCE DIVERGENCE
-
 # plugins/indicators/macd.py
 def ema(prices, window):
     k = 2 / (window + 1)

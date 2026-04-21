@@ -1,4 +1,4 @@
 {
-  "data_path": "data/test_data.csv",
+  "data_path": "data/test.csv",
   "model_path": "models/model.pkl"
 }

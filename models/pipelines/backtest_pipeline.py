@@ -22,7 +22,7 @@ def run_backtest_pipeline(config_path: str = "configs/backtest_config.json"):
 
     # Load historical data
     df = pd.read_csv(data_path)
-    X = df.drop("target", axis=1)
+    X = df.drop(["target", "timestamp"], axis=1, errors='ignore')
     y = df["target"]
 
     # Load trained model

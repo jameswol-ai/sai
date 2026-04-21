@@ -1,5 +1,3 @@
-RELATIVE STRENGTH INDEX
-
 # plugins/indicators/rsi.py
 def rsi(prices, window=14):
     if len(prices) < window + 1:

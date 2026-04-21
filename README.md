@@ -1,52 +1,152 @@
-# sai
+# SAI - AI Trading Bot
 
-ai-trading-bot/
-│
+An intelligent algorithmic trading bot that uses machine learning to predict market movements and execute trades automatically.
+
+## Features
+
+- **Machine Learning Model**: Uses Random Forest classifier trained on OHLCV data
+- **Multiple Trading Modes**: Train, Evaluate, Backtest, Deploy, and Live Trading
+- **Exchange Integration**: Supports Binance and other exchanges via CCXT
+- **Modular Architecture**: Clean separation of concerns with plugins and pipelines
+- **Configuration Management**: JSON-based configuration for all components
+- **Comprehensive Testing**: Full test suite with pytest
+
+## Project Structure
+
+```
+sai/
 ├── bot/
-│   ├── main.py
-│   ├── strategy.py
-│   ├── data.py
-│   ├── trader.py
-│
+│   ├── main.py           # Main entry point with CLI
+│   ├── strategy.py       # ML strategy implementation
+│   ├── trader.py         # Trading logic and execution
+│   ├── data.py           # Data fetching utilities
+│   └── utils.py          # Utility functions
 ├── models/
-│   ├── model.pkl
-│
-├── tests/
-│
-├── requirements.txt
-├── .env
-├── Dockerfile
-└── README.md
+│   ├── train.py          # Model training script
+│   ├── evaluate.py       # Model evaluation script
+│   └── pipelines/        # ML pipelines
+│       ├── train_pipeline.py
+│       ├── evaluate_pipeline.py
+│       ├── backtest_pipeline.py
+│       └── deploy_pipeline.py
+├── plugins/
+│   ├── exchanges/        # Exchange integrations
+│   ├── indicators/       # Technical indicators
+│   └── broker.py         # Broker API wrapper
+├── configs/              # Configuration files
+├── scripts/              # Utility scripts
+├── tests/                # Test suite
+├── data/                 # Training/test data
+├── logs/                 # Log files
+├── infra/                # Infrastructure configs
+└── requirements.txt      # Python dependencies
+```
 
+## Quick Start
 
-Repo Structure (Expanded)
+### 1. Install Dependencies
 
-ai-trading-bot/
-│
-├── bot/
-│   ├── main.py
-│   ├── strategy.py
-│   ├── data.py
-│   ├── trader.py
-│
-├── models/
-│   ├── model.pkl
-│
-├── guides/
-│   ├── setup.md
-│   ├── strategies.md
-│   ├── risk.md
-│   ├── deployment.md
-│
-├── tests/
-│   ├── test_strategy.py
-│   ├── test_data.py
-│   ├── test_trader.py
-│
-├── requirements.txt
-├── .env
-├── Dockerfile
-└── README.md
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Generate Sample Data
+
+```bash
+python scripts/generate_sample_data.py
+```
+
+### 3. Train the Model
+
+```bash
+python bot/main.py --mode train
+```
+
+### 4. Evaluate Performance
+
+```bash
+python bot/main.py --mode evaluate
+```
+
+### 5. Run Backtest
+
+```bash
+python bot/main.py --mode backtest
+```
+
+## Usage
+
+### Command Line Interface
+
+```bash
+python bot/main.py --mode [train|evaluate|backtest|deploy|live] [--config CONFIG_FILE]
+```
+
+### Modes
+
+- **train**: Train the ML model on historical data
+- **evaluate**: Evaluate model performance on test data
+- **backtest**: Simulate trading on historical data
+- **deploy**: Deploy the model to production (Docker/K8s)
+- **live**: Run live trading (requires API keys)
+
+### Configuration
+
+All modes use JSON configuration files in the `configs/` directory:
+
+- `train_config.json`: Training parameters
+- `evaluate_configs.json`: Evaluation parameters
+- `backtest_config.json`: Backtesting parameters
+- `deploy_config.json`: Deployment settings
+
+## Environment Setup
+
+Create a `.env` file with your API credentials:
+
+```env
+BROKER_API_KEY=your_api_key_here
+BROKER_SECRET=your_secret_here
+BROKER_ENDPOINT=https://paper-api.alpaca.markets
+```
+
+## Testing
+
+Run the test suite:
+
+```bash
+python -m pytest tests/ -v
+```
+
+## Deployment
+
+### Docker
+
+```bash
+docker build -t sai-trading-bot .
+docker run sai-trading-bot
+```
+
+### Kubernetes
+
+```bash
+kubectl apply -f k8s/deployment.yaml
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Add tests for new functionality
+4. Ensure all tests pass
+5. Submit a pull request
+
+## License
+
+See LICENSE file for details.
+
+## Disclaimer
+
+This software is for educational purposes only. Trading cryptocurrencies involves significant risk. Use at your own risk.
 
 sai/
 ├── bot/                     # Core trading bot logic

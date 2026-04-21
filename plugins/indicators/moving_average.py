@@ -1,5 +1,3 @@
-SIMPLE MOVING INDICATORS
-
 # plugins/indicators/moving_average.py
 def sma(prices, window=20):
     if len(prices) < window:

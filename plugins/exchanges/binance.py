@@ -59,3 +59,19 @@ class BinanceExchange(BaseExchange):
         """Cancel an existing order."""
         try:
             return self.client.cancel_order(symbol=symbol, orderId=order_id)
+        except BinanceAPIException as e:
+            return {"error": str(e)}
+
+    def get_balance(self):
+        """Get account balance."""
+        try:
+            return self.client.get_account()
+        except BinanceAPIException as e:
+            return {"error": str(e)}
+
+    def get_trade_history(self, symbol: str):
+        """Get trade history for a symbol."""
+        try:
+            return self.client.get_my_trades(symbol=symbol)
+        except BinanceAPIException as e:
+            return {"error": str(e)}

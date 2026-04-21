@@ -109,12 +109,31 @@ BROKER_SECRET=your_secret_here
 BROKER_ENDPOINT=https://paper-api.alpaca.markets
 ```
 
-## Testing
+## Web API
 
-Run the test suite:
+The AI trading bot includes a REST API for real-time predictions:
 
 ```bash
-python -m pytest tests/ -v
+# Start the API server
+python api.py
+
+# Health check
+curl http://localhost:8000/health
+
+# Get prediction
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"open": 50000, "high": 51000, "low": 49000, "close": 50500, "volume": 1000}'
+```
+
+**Response:**
+```json
+{
+  "prediction": 0,
+  "probability_class_0": 0.93,
+  "probability_class_1": 0.07,
+  "signal": "SELL"
+}
 ```
 
 ## Deployment
@@ -201,3 +220,30 @@ sai/
 
 ├── README.md                # Project overview
 └── LICENSE                  # License file
+
+## Web API
+
+The AI trading bot includes a REST API for real-time predictions:
+
+```bash
+# Start the API server
+python api.py
+
+# Health check
+curl http://localhost:8000/health
+
+# Get prediction
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"open": 50000, "high": 51000, "low": 49000, "close": 50500, "volume": 1000}'
+```
+
+**Response:**
+```json
+{
+  "prediction": 0,
+  "probability_class_0": 0.93,
+  "probability_class_1": 0.07,
+  "signal": "SELL"
+}
+```

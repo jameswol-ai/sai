@@ -1,0 +1,29 @@
+# configs/kraken.yaml
+
+# Kraken API configuration
+api_key: "YOUR_KRAKEN_API_KEY"
+api_secret: "YOUR_KRAKEN_API_SECRET"
+
+# General settings
+base_url: "https://api.kraken.com"
+sandbox: false   # set to true if using Kraken's demo environment
+
+# Trading parameters
+default_symbol: "XBT/USD"
+default_quantity: 0.01
+default_order_type: "limit"   # limit or market
+
+# Risk management
+max_position_size: 0.1         # maximum BTC position size
+stop_loss_pct: 0.02            # 2% stop-loss
+take_profit_pct: 0.05          # 5% take-profit
+
+# Logging & monitoring
+log_level: "INFO"
+log_file: "logs/kraken.log"
+
+# Optional: WebSocket settings
+websocket:
+  enabled: true
+  reconnect: true
+  ping_interval: 30

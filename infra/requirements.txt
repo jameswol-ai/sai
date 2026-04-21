@@ -1,0 +1,19 @@
+# Core infrastructure tooling
+docker==7.0.0
+docker-compose==1.29.2
+
+# Database clients
+psycopg2-binary==2.9.9   # PostgreSQL driver
+redis==5.0.1             # Redis client
+
+# Monitoring & metrics
+prometheus-client==0.20.0
+grafana-api==1.0.0
+
+# Deployment & orchestration helpers
+kubernetes==29.0.0       # For infra/k8s manifests
+python-dotenv==1.0.1     # Load .env configs
+
+# Testing infra
+pytest==8.1.1
+pytest-docker==0.10.3

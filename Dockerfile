@@ -1,9 +1,16 @@
-FROM python:3.11
+# Dockerfile for SAI Trading Bot
 
+# Use official Python image
+FROM python:3.11-slim
+
+# Set working directory
 WORKDIR /app
 
-COPY . .
+# Copy repo files
+COPY . /app
 
-RUN pip install -r requirements.txt
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-CMD ["python", "bot/main.py"]
+# Default command: run main.py
+ENTRYPOINT ["python", "bot/main.py"]

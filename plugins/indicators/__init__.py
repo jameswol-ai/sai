@@ -1,4 +1,5 @@
 # plugins/indicators/__init__.py
+
 """
 Indicators package initializer.
 

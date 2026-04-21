@@ -1,0 +1,29 @@
+# configs/binance.yaml
+
+# Binance API configuration
+api_key: "YOUR_BINANCE_API_KEY"
+api_secret: "YOUR_BINANCE_API_SECRET"
+
+# General settings
+base_url: "https://api.binance.com"
+testnet: false   # set to true if using Binance Testnet
+
+# Trading parameters
+default_symbol: "BTCUSDT"
+default_quantity: 0.001
+default_order_type: "MARKET"   # MARKET or LIMIT
+
+# Risk management
+max_position_size: 0.01        # maximum BTC position size
+stop_loss_pct: 0.02            # 2% stop-loss
+take_profit_pct: 0.05          # 5% take-profit
+
+# Logging & monitoring
+log_level: "INFO"
+log_file: "logs/binance.log"
+
+# Optional: WebSocket settings
+websocket:
+  enabled: true
+  reconnect: true
+  ping_interval: 60

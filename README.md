@@ -11,7 +11,7 @@ ai-trading-bot/
 ├── models/
 │   ├── model.pkl
 │
-├── tests/*
+├── tests/
 │
 ├── requirements.txt
 ├── .env
@@ -19,10 +19,8 @@ ai-trading-bot/
 └── README.md
 
 
-
-
 Repo Structure (Expanded)
-# sai
+
 ai-trading-bot/
 │
 ├── bot/

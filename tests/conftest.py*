@@ -1,0 +1,50 @@
+{
+  "metadata": {
+    "source": "mock",
+    "description": "Sample OHLCV data for testing",
+    "symbol": "BTC/USDT",
+    "interval": "1d"
+  },
+  "data": [
+    {
+      "timestamp": "2024-01-01T00:00:00",
+      "open": 100,
+      "high": 105,
+      "low": 95,
+      "close": 102,
+      "volume": 1000
+    },
+    {
+      "timestamp": "2024-01-02T00:00:00",
+      "open": 102,
+      "high": 108,
+      "low": 101,
+      "close": 107,
+      "volume": 1200
+    },
+    {
+      "timestamp": "2024-01-03T00:00:00",
+      "open": 107,
+      "high": 110,
+      "low": 104,
+      "close": 105,
+      "volume": 1300
+    },
+    {
+      "timestamp": "2024-01-04T00:00:00",
+      "open": 105,
+      "high": 106,
+      "low": 100,
+      "close": 101,
+      "volume": 900
+    },
+    {
+      "timestamp": "2024-01-05T00:00:00",
+      "open": 101,
+      "high": 103,
+      "low": 98,
+      "close": 99,
+      "volume": 1100
+    }
+  ]
+}

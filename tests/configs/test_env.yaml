@@ -1,0 +1,39 @@
+# Sample environment configuration for integration tests
+# Path: tests/configs/test_env.yaml
+
+environment:
+  mode: "paper"        # Options: paper, live
+  logging_level: "INFO"
+
+broker:
+  name: "MockBroker"
+  api_key: "TEST_API_KEY"
+  api_secret: "TEST_API_SECRET"
+  base_url: "https://mock-broker.test/api"
+
+database:
+  type: "sqlite"
+  uri: "sqlite:///tests/test.db"
+
+model:
+  path: "models/model.pkl"
+  version: "1.0.0"
+
+risk:
+  stop_loss: 0.05      # 5% stop-loss
+  take_profit: 0.05    # 5% take-profit
+  position_sizing:
+    balance: 10000
+    risk_pct: 0.02
+    stop_loss: 50
+
+notifications:
+  email:
+    enabled: true
+    smtp_server: "smtp.test.com"
+    smtp_port: 587
+    username: "test_user"
+    password: "test_pass"
+  slack:
+    enabled: false
+    webhook_url: ""

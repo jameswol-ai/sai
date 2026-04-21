@@ -1,0 +1,36 @@
+# configs/mock.yaml
+
+# Mock Exchange configuration
+exchange_name: "MockExchange"
+
+# Initial balances
+balances:
+  USD: 10000.0
+  BTC: 2.0
+  ETH: 5.0
+
+# Static prices (can be overridden in code)
+prices:
+  BTC-USD: 50000.0
+  ETH-USD: 3000.0
+
+# Trading parameters
+default_symbol: "BTC-USD"
+default_quantity: 0.1
+default_order_type: "limit"   # limit or market
+
+# Risk management
+max_position_size: 1.0        # maximum BTC position size
+stop_loss_pct: 0.02           # 2% stop-loss
+take_profit_pct: 0.05         # 5% take-profit
+
+# Simulation behavior
+simulation:
+  instant_fill: true          # orders fill immediately
+  slippage_pct: 0.001         # 0.1% slippage
+  latency_ms: 50              # simulated network latency
+  partial_fill: false         # allow partial fills if true
+
+# Logging
+log_level: "DEBUG"
+log_file: "logs/mock_exchange.log"

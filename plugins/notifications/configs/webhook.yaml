@@ -1,0 +1,16 @@
+# plugins/notifications/configs/webhook.yaml
+
+# Webhook configuration
+webhook_url: "https://example.com/webhook-endpoint"
+
+# Optional headers (e.g., authentication tokens)
+headers:
+  Content-Type: "application/json"
+  Authorization: "Bearer YOUR_API_TOKEN"
+
+# Message settings
+default_prefix: "[TradingBot]"   # Optional prefix for all messages
+
+# Logging
+log_level: "INFO"
+log_file: "logs/webhook_notifier.log"

@@ -16,7 +16,8 @@ spec:
     spec:
       containers:
         - name: sai-bot-container
-          image: sai-trading-bot:v1.0.0
+          # Use the same image you build via Docker/Docker Compose
+          image: ghcr.io/your-org/sai-bot:latest
           ports:
             - containerPort: 8080
           env:

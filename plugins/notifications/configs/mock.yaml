@@ -1,0 +1,17 @@
+# plugins/notifications/configs/mock.yaml
+
+# Mock notifier configuration
+notifier_name: "MockNotifier"
+
+# Behavior toggles
+print_to_console: true       # Print messages to stdout
+record_messages: true        # Keep messages in memory for inspection
+simulate_latency_ms: 10      # Fake delay before "sending"
+simulate_failure_rate: 0.0   # Probability of simulated send failure (0.0 = never)
+
+# Defaults
+default_prefix: "[MockBot]"  # Prefix for all messages
+
+# Logging
+log_level: "DEBUG"
+log_file: "logs/mock_notifier.log"

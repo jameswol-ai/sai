@@ -1,0 +1,16 @@
+# plugins/notifications/configs/sms.yaml
+
+# SMS provider configuration (Twilio example)
+account_sid: "YOUR_TWILIO_ACCOUNT_SID"
+auth_token: "YOUR_TWILIO_AUTH_TOKEN"
+
+# Phone numbers
+from_number: "+1234567890"   # Twilio number
+to_number: "+0987654321"     # Recipient number
+
+# Message settings
+default_prefix: "[TradingBot]"   # Optional prefix for all messages
+
+# Logging
+log_level: "INFO"
+log_file: "logs/sms_notifier.log"

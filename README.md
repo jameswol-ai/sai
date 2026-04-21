@@ -1,4 +1,4 @@
-# SAI - AI Trading Bot
+# sai
 
 An intelligent algorithmic trading bot that uses machine learning to predict market movements and execute trades automatically.
 

@@ -1,0 +1,24 @@
+[
+    {
+        "timestamp": "2026-04-21T09:45:12.345678",
+        "model_path": "models/model.pkl",
+        "data_path": "data/test_data.csv",
+        "metrics": {
+            "accuracy": 0.87,
+            "precision": 0.85,
+            "recall": 0.83,
+            "f1_score": 0.84
+        }
+    },
+    {
+        "timestamp": "2026-04-21T09:50:27.123456",
+        "model_path": "models/model.pkl",
+        "data_path": "data/test_data.csv",
+        "metrics": {
+            "accuracy": 0.89,
+            "precision": 0.88,
+            "recall": 0.86,
+            "f1_score": 0.87
+        }
+    }
+]

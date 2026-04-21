@@ -1,0 +1,13 @@
+# plugins/notifications/configs/slack.yaml
+
+# Slack webhook configuration
+webhook_url: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+
+# Message settings
+channel: "#trading-alerts"       # Optional: target channel name
+username: "TradingBot"           # Display name for the bot
+icon_emoji: ":robot_face:"       # Emoji avatar for messages
+
+# Logging
+log_level: "INFO"
+log_file: "logs/slack_notifier.log"

@@ -1,0 +1,13 @@
+# plugins/notifications/configs/telegram.yaml
+
+# Telegram Bot configuration
+bot_token: "YOUR_TELEGRAM_BOT_TOKEN"
+chat_id: "YOUR_CHAT_ID"   # numeric ID or @channelusername
+
+# Message settings
+default_prefix: "[TradingBot]"   # Optional prefix for all messages
+parse_mode: "Markdown"           # Options: Markdown, HTML, or leave blank
+
+# Logging
+log_level: "INFO"
+log_file: "logs/telegram_notifier.log"

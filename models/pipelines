@@ -1,0 +1,6 @@
+pipelines/
+├── train_pipeline.py       # End-to-end training workflow
+├── evaluate_pipeline.py    # Model evaluation workflow
+├── backtest_pipeline.py    # Simulate trading strategy on historical data
+├── deploy_pipeline.py      # Package & deploy model/bot
+└── __init__.py             # Makes pipelines importable

@@ -1,36 +1,19 @@
 # sai/streamlit_app.py 
 
 import streamlit as st
-
 from sai.core.engine import WorkflowEngine
-from sai.stages.sample_stages import (
-    ingest_stage,
-    analysis_stage,
-    decision_stage,
-    execution_stage,
+from sai.plugins.moving_average import MovingAverageStrategy
+from sai.plugins.stop_loss import StopLoss
+
+# Initialize engine with strategies and risk modules
+engine = WorkflowEngine(
+    strategies=[MovingAverageStrategy()],
+    risk_modules=[StopLoss()]
 )
 
-# Define workflow
-workflow = {
-    "trading_pipeline": [
-        {"name": "ingest", "function": ingest_stage},
-        {"name": "analysis", "function": analysis_stage},
-        {"name": "decision", "function": decision_stage},
-        {"name": "execution", "function": execution_stage},
-    ]
-}
+st.title("SAI Trading Bot")
 
-# UI
-st.title("📈 SAI Trading Bot Workflow")
+market_data = {"price": 100, "history": [95, 97, 99, 100]}
+decision = engine.run(market_data)
 
-user_input = st.text_input("Enter market symbol or dataset path:")
-
-if st.button("Run Trading Workflow"):
-    engine = WorkflowEngine(workflow)
-    engine.set_context("input", user_input)
-
-    results = engine.run_workflow("trading_pipeline")
-
-    st.subheader("Workflow Results:")
-    for r in results:
-        st.write(f"Stage: {r['stage']} → Output: {r['output']}")
+st.write("Decision:", decision)

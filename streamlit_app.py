@@ -1,8 +1,8 @@
 import streamlit as st
 
 # Proper absolute import from sai package
-from sai.bot.main import main.py, get_data, decide_action, SimpleModel
-from sai.utils import setup_logger
+from main.py import run_bot, get_data, decide_action, SimpleModel
+from utils.py import setup_logger
 
 logger = setup_logger("sai_streamlit")
 

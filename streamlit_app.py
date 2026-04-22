@@ -1,11 +1,13 @@
 import streamlit as st
+# Use absolute import from the sai package
 from sai.bot.main import run_bot, get_data, decide_action, SimpleModel
 
 def main():
     st.title("SAI Trading Bot Dashboard")
 
     if st.sidebar.button("Run Bot"):
-        run_bot()
+        action = run_bot()
+        st.write("Bot Action:", action)
 
     if st.sidebar.button("Refresh Data"):
         data = get_data()

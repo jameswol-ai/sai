@@ -19,7 +19,6 @@ def get_data():
     Simulate market data ingestion.
     Replace with real API or data feed.
     """
-    # Example: dummy list of prices
     return [100, 102, 101, 103, 104]
 
 def decide_action(data):

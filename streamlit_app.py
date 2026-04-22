@@ -1,7 +1,7 @@
 # sai/streamlit_app.py 
 
 import streamlit as st
-from sai.bot.main import run_bot, get_data, decide_action, SimpleModel
+from sai.bot.main import sai_bot, get_data, decide_action, SimpleModel
 from sai.utils import setup_logger
 
 logger = setup_logger("sai_streamlit")

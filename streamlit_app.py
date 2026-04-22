@@ -1,40 +1,97 @@
 # sai/streamlit_app.py 
 
 import streamlit as st
-from sai.bot.main import sai.bot, get_data, decide_action, SimpleModel
-from sai.utils import setup_logger
 
-logger = setup_logger("sai_streamlit")
+# Core system
+from src.core.engine import WorkflowEngine
+from src.core.doc_loader import DocLoader
+from src.core.retriever import SimpleRetriever
+from src.core.location_resolver import LocationResolver
 
-def main():
-    st.title("📈 SAI Trading Bot Dashboard")
-    st.sidebar.header("Controls")
+# -------------------------------
+# 🔧 Setup System (runs once)
+# -------------------------------
+@st.cache_resource
+def initialize_engine():
+    doc_loader = DocLoader()
 
-    if st.sidebar.button("Run Bot"):
-        action = run_bot()
-        st.success(f"Bot executed. Action: {action}")
-        logger.info(f"Streamlit triggered bot run: {action}")
+    documents = {
+        "global": doc_loader.load_doc("docs/building_codes/global_standards.md"),
+        "tropical": doc_loader.load_doc("docs/building_codes/tropical_climate.md"),
+        "fire": doc_loader.load_doc("docs/building_codes/fire_safety_rules.md"),
+    }
 
-    if st.sidebar.button("Refresh Data"):
-        data = get_data()
-        st.subheader("Latest Market Data")
-        st.write(data)
-        logger.info("Data refreshed in Streamlit")
+    retriever = SimpleRetriever(documents)
+    resolver = LocationResolver()
 
-    if st.sidebar.button("Decide Action"):
-        data = get_data()
-        action = decide_action(data)
-        st.subheader("Bot Decision")
-        st.write(action)
-        logger.info(f"Decision made: {action}")
+    # Example workflow (you can load from JSON instead)
+    workflow = {
+        "basic_design": [
+            {"name": "concept"},
+            {"name": "compliance"},
+            {"name": "output"},
+        ]
+    }
 
-    if st.sidebar.button("Test Model"):
-        model = SimpleModel()
-        sample_data = get_data()
-        prediction = model.predict(sample_data)
-        st.subheader("Model Prediction")
-        st.write(prediction)
-        logger.info(f"Model tested: {prediction}")
+    engine = WorkflowEngine(workflow)
 
-if __name__ == "__main__":
-    main()
+    # Inject intelligence into context
+    engine.set_context("retriever", retriever)
+    engine.set_context("location_resolver", resolver)
+    engine.set_context("building_codes_tropical", documents["tropical"])
+
+    return engine
+
+
+# -------------------------------
+# 🎨 UI Layout
+# -------------------------------
+st.set_page_config(page_title="AI Architecture Bot", layout="wide")
+
+st.title("🏗️ AI Architecture Bot")
+st.caption("Designs that think about climate, rules, and reality")
+
+engine = initialize_engine()
+
+# -------------------------------
+# 🧠 User Input
+# -------------------------------
+user_input = st.text_area(
+    "Describe your project:",
+    placeholder="e.g. Eco-friendly school in Juba with natural ventilation",
+    height=120
+)
+
+run_button = st.button("🚀 Generate Design")
+
+# -------------------------------
+# ⚙️ Run Workflow
+# -------------------------------
+if run_button and user_input.strip():
+    with st.spinner("Designing... thinking... consulting the code gods 📜"):
+        engine.set_context("input", user_input)
+
+        result = engine.run_workflow("basic_design")
+
+    st.success("Design generated!")
+
+    # -------------------------------
+    # 📤 Output Sections
+    # -------------------------------
+    st.subheader("🧠 Concept")
+    st.write(result.get("concept", "No concept generated"))
+
+    st.subheader("📏 Compliance")
+    st.write(result.get("compliance", "No compliance check"))
+
+    st.subheader("📄 Final Output")
+    st.write(result.get("output", "No final output"))
+
+    # -------------------------------
+    # 🔍 Debug / Transparency
+    # -------------------------------
+    with st.expander("🔍 Internal Context (for debugging)"):
+        st.json(result)
+
+elif run_button:
+    st.warning("Please enter a project description first.")

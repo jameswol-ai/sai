@@ -1,11 +1,10 @@
 import streamlit as st
 
-# Use relative import if running inside sai/ as package
-try:
-    from sai.bot.main import run_bot, get_data, decide_action, SimpleModel
-except ImportError:
-    # Fallback if running directly from sai/ folder
-    from bot.main import run_bot, get_data, decide_action, SimpleModel
+# Proper absolute import from sai package
+from sai.bot.main import run_bot, get_data, decide_action, SimpleModel
+from sai.utils import setup_logger
+
+logger = setup_logger("sai_streamlit")
 
 def main():
     st.title("SAI Trading Bot Dashboard")

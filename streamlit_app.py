@@ -1,8 +1,8 @@
 # sai/streamlit_app.py 
 
- import streamlit as st
+import streamlit as st
 
-# Correct imports using dot notation
+# Proper absolute imports using dot notation
 from sai.bot.main import run_bot, get_data, decide_action, SimpleModel
 from sai.utils import setup_logger
 

@@ -3,84 +3,108 @@ import streamlit as st
 import threading
 import time
 import logging
-import sys
-import os
-from sai.core.trading_bot import TradingBot
-from sai.core.model_utils import load_model, test_model
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sai.core.trading import TradingBot
+from sai.core.models import load_model, save_model
+from sai.core.utils import get_price_data, execute_trade
 
 # --- Logging Setup ---
-LOG_FILE = "sai_logs.log"
 logging.basicConfig(
-    filename=LOG_FILE,
+    filename="sai_app.log",
     level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
+    format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
 # --- Session State Init ---
+if "bot" not in st.session_state:
+    st.session_state.bot = TradingBot()
 if "running" not in st.session_state:
     st.session_state.running = False
-if "prices" not in st.session_state:
-    st.session_state.prices = []
 if "trades" not in st.session_state:
     st.session_state.trades = []
+if "prices" not in st.session_state:
+    st.session_state.prices = pd.DataFrame()
 
 # --- Live Trading Loop ---
-def run_bot_loop(bot: TradingBot):
+def run_trading_loop():
     while st.session_state.running:
-        price, trade = bot.step()
-        st.session_state.prices.append(price)
-        if trade:
-            st.session_state.trades.append(trade)
-            logging.info(f"Trade executed: {trade}")
-        time.sleep(1)
+        price = get_price_data()
+        action = st.session_state.bot.decide(price)
+        trade = execute_trade(action, price)
+        st.session_state.trades.append(trade)
+        st.session_state.prices = pd.concat(
+            [st.session_state.prices, pd.DataFrame([{"time": time.time(), "price": price}])]
+        )
+        logging.info(f"Trade executed: {trade}")
+        time.sleep(2)
 
 # --- Tabs ---
-tab_dashboard, tab_strategy, tab_logs, tab_model, tab_debug = st.tabs(
-    ["📊 Dashboard", "⚙️ Strategy Config", "📝 Logs", "🤖 Model Testing", "🐞 Debug"]
-)
+st.set_page_config(page_title="SAI Trading Bot", layout="wide")
+tabs = st.tabs(["📊 Dashboard", "⚙️ Strategy Config", "📝 Logs", "🧪 Model Testing", "🐞 Debug"])
 
 # --- Dashboard ---
-with tab_dashboard:
+with tabs[0]:
     st.header("Live Trading Dashboard")
-    bot = TradingBot()
-    if st.button("Start Bot"):
-        if not st.session_state.running:
+    col1, col2 = st.columns([2,1])
+    with col1:
+        if st.session_state.running:
+            st.success("Bot is running...")
+        else:
+            st.warning("Bot is stopped.")
+        if st.button("Start Bot"):
             st.session_state.running = True
-            threading.Thread(target=run_bot_loop, args=(bot,), daemon=True).start()
-    if st.button("Stop Bot"):
-        st.session_state.running = False
+            threading.Thread(target=run_trading_loop, daemon=True).start()
+        if st.button("Stop Bot"):
+            st.session_state.running = False
 
-    st.line_chart(st.session_state.prices)
-    st.write("Executed Trades:", st.session_state.trades)
+        st.subheader("Price Chart")
+        if not st.session_state.prices.empty:
+            fig, ax = plt.subplots()
+            ax.plot(st.session_state.prices["time"], st.session_state.prices["price"], label="Price")
+            ax.legend()
+            st.pyplot(fig)
+
+    with col2:
+        st.subheader("Metrics")
+        st.metric("Total Trades", len(st.session_state.trades))
+        if st.session_state.trades:
+            pnl = sum([t["pnl"] for t in st.session_state.trades])
+            st.metric("PnL", f"{pnl:.2f}")
 
 # --- Strategy Config ---
-with tab_strategy:
+with tabs[1]:
     st.header("Strategy Configuration")
-    risk = st.slider("Risk Level", 0.0, 1.0, 0.5)
-    st.write(f"Current risk setting: {risk}")
+    risk = st.slider("Risk Level", 0.0, 1.0, st.session_state.bot.risk)
+    st.session_state.bot.risk = risk
+    st.write("Current risk:", risk)
 
 # --- Logs ---
-with tab_logs:
-    st.header("Trading Logs")
-    if os.path.exists(LOG_FILE):
-        with open(LOG_FILE, "r") as f:
-            st.text(f.read())
-    else:
-        st.write("No logs yet.")
+with tabs[2]:
+    st.header("Application Logs")
+    with open("sai_app.log") as f:
+        logs = f.read()
+    st.text_area("Logs", logs, height=400)
 
 # --- Model Testing ---
-with tab_model:
+with tabs[3]:
     st.header("Model Testing")
-    uploaded_model = st.file_uploader("Upload model.pkl", type=["pkl"])
-    if uploaded_model:
-        model = load_model(uploaded_model)
-        st.success("Model loaded successfully.")
-        test_results = test_model(model)
-        st.write("Test Results:", test_results)
+    uploaded = st.file_uploader("Upload test dataset (CSV)", type="csv")
+    if uploaded:
+        df = pd.read_csv(uploaded)
+        model = load_model("model.pkl")
+        preds = model.predict(df.drop("target", axis=1))
+        st.write("Predictions:", preds[:10])
+        st.line_chart(preds)
+
+    if st.button("Save Current Model"):
+        save_model(st.session_state.bot.model, "model.pkl")
+        st.success("Model saved.")
 
 # --- Debug ---
-with tab_debug:
-    st.header("Debug Info")
-    st.write("Python version:", sys.version)
-    st.write("Working directory:", os.getcwd())
-    st.write("Session state:", st.session_state)
+with tabs[4]:
+    st.header("Debug Tools")
+    st.write("Session State:", st.session_state)
+    st.write("Trades:", st.session_state.trades)
+    st.write("Prices:", st.session_state.prices.tail())

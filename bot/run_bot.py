@@ -1,38 +1,48 @@
 # sai/bot/run_bot.py
 
 import logging
+import yaml
 from sai.bot.main import get_data, decide_action, SimpleModel
-from sai.bot.trader import Trader   # <-- your execution module
+from sai.bot.trader import Trader
 
-# Configure logging
-logging.basicConfig(
-    filename="trading.log",
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
+def load_config(path="sai/configs/config.yaml"):
+    with open(path, "r") as f:
+        return yaml.safe_load(f)
 
 def run_bot():
-    """Main trading loop for SAI bot with execution."""
+    # Load config
+    config = load_config()
+
+    # Configure logging
+    logging.basicConfig(
+        filename=config["logging"]["file"],
+        level=getattr(logging, config["logging"]["level"]),
+        format="%(asctime)s [%(levelname)s] %(message)s"
+    )
+
     logging.info("Starting trading bot...")
     model = SimpleModel()
-    trader = Trader()   # initialize broker/exchange connection
+    trader = Trader(broker=config["broker"])
 
     try:
         while True:
-            # Fetch market data
-            data = get_data()
+            for symbol in config["symbols"]:
+                # Fetch market data
+                data = get_data(symbol=symbol)
 
-            # Decide action based on strategy/model
-            action = decide_action(model, data)
+                # Decide action
+                action = decide_action(model, data)
 
-            # Log and execute action
-            logging.info(f"Data: {data} | Action: {action}")
-            print(f"Trade decision: {action}")
+                # Log and execute
+                logging.info(f"Symbol: {symbol} | Data: {data} | Action: {action}")
+                print(f"{symbol} decision: {action}")
 
-            if action in ["BUY", "SELL"]:
-                result = trader.execute(action, data)
-                logging.info(f"Execution result: {result}")
-                print(f"Executed: {result}")
+                if action in ["BUY", "SELL"]:
+                    data["symbol"] = symbol
+                    data["qty"] = config["position_sizing"]["default_qty"]
+                    result = trader.execute(action, data)
+                    logging.info(f"Execution result: {result}")
+                    print(f"Executed: {result}")
 
     except KeyboardInterrupt:
         logging.info("Bot stopped manually.")

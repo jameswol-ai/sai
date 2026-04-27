@@ -32,6 +32,36 @@ st.caption("Resilient Workflow Engine • Debug Mode Enabled")
 tabs = st.tabs(["📊 Dashboard", "⚙️ Strategy Config", "📝 Logs", "🧪 Model Testing", "⚙️ Debug"])
 
 # --- Dashboard ---
+import time
+import pandas as pd
+
+# --- Dashboard ---
+with tabs[0]:
+    st.header("📊 Trading Dashboard")
+    st.write("Live bot performance, trades, and PnL.")
+
+    # Containers for dynamic updates
+    price_chart = st.empty()
+    trade_log = st.empty()
+    pnl_display = st.empty()
+
+    # Example live loop (replace with real bot data)
+    if st.button("▶️ Start Live Bot"):
+        for i in range(20):  # simulate 20 ticks
+            # Simulated market data
+            prices = [100 + j*0.5 for j in range(i+1)]
+            df = pd.DataFrame({"Price": prices})
+
+            # Update chart
+            price_chart.line_chart(df)
+
+            # Update trade log
+            trade_log.text(f"Tick {i} | TRADE | BUY BTCUSD @ {prices[-1]}")
+
+            # Update PnL
+            pnl_display.metric("PnL", f"${round((prices[-1]-100)*10,2)}")
+
+            time.sleep(1)  # refresh every second
 with tabs[0]:
     st.header("📊 Trading Dashboard")
     st.write("Overview of bot performance, PnL, and market data.")

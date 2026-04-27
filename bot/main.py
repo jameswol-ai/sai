@@ -1,37 +1,58 @@
 # sai/bot/main.py
+"""
+Core trading bot logic for SAI.
+Provides run_bot() entry point with mode and config support.
+"""
 
 import logging
-from sai.utils import setup_logger
+import time
+import random
 
-logger = setup_logger("sai_bot")
-
+# Example simple model class
 class SimpleModel:
-    """Basic demo model for trading decisions."""
     def predict(self, data):
-        if not data:
-            return "HOLD"
-        avg = sum(data) / len(data)
-        return "BUY" if avg > 0 else "SELL"
+        # Dummy prediction logic
+        return random.choice(["BUY", "SELL", "HOLD"])
+
+def setup_logger():
+    logger = logging.getLogger("SAI_Bot")
+    logger.setLevel(logging.INFO)
+    fh = logging.FileHandler("sai_bot.log")
+    fh.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+    return logger
 
 def get_data():
-    """Stub for fetching market data. Replace with real pipeline later."""
-    return [10, -5, 15, 20, -2]
+    # Replace with real market data fetch
+    return {"price": random.uniform(90, 110)}
 
-def decide_action(data):
-    """Decide trading action based on average value."""
-    if not data:
-        return "HOLD"
-    avg = sum(data) / len(data)
-    if avg > 5:
-        return "BUY"
-    elif avg < -5:
-        return "SELL"
-    return "HOLD"
+def decide_action(model, data):
+    return model.predict(data)
 
-def run_bot():
-    """Run the trading bot once."""
-    data = get_data()
-    action = decide_action(data)
-    logger.info(f"Bot decided action: {action}")
-    return action
-    
+def execute_trade(action, mode, logger):
+    if mode == "sandbox":
+        logger.info(f"[SANDBOX] Simulated trade: {action}")
+    elif mode == "live":
+        logger.info(f"[LIVE] Executed trade: {action}")
+    else:
+        logger.info(f"[DEFAULT] Action: {action}")
+
+def run_bot(mode="sandbox", config=None):
+    logger = setup_logger()
+    model = SimpleModel()
+
+    logger.info("Starting SAI Bot...")
+    logger.info(f"Mode: {mode}")
+    if config:
+        logger.info(f"Config loaded: {config}")
+
+    try:
+        while True:
+            data = get_data()
+            action = decide_action(model, data)
+            execute_trade(action, mode, logger)
+            time.sleep(2)  # loop delay
+    except KeyboardInterrupt:
+        logger.info("Bot stopped by user.")

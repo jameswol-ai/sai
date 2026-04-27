@@ -1,71 +1,20 @@
 # sai/bot/main.py
 
-from bot.memory import TradeMemory
-from bot.learning import StrategyLearner
+from sai.utils import setup_logger
 
-memory = TradeMemory()
-learner = StrategyLearner()
-
-def on_trade_complete(trade):
-    pnl = trade["pnl"]
-
-    memory.log(trade)
-    learner.update(trade["signal_used"], pnl)
-
-"""
-Core trading bot logic for SAI.
-Provides run_bot() entry point with mode and config support.
-"""
-
-import logging
-import time
-import random
-
-# Example simple model class
-class SimpleModel:
-    def predict(self, data):
-        # Dummy prediction logic
-        return random.choice(["BUY", "SELL", "HOLD"])
-
-def setup_logger():
-    logger = logging.getLogger("SAI_Bot")
-    logger.setLevel(logging.INFO)
-    fh = logging.FileHandler("sai_bot.log")
-    fh.setLevel(logging.INFO)
-    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-    fh.setFormatter(formatter)
-    logger.addHandler(fh)
-    return logger
+def run_bot():
+    logger = setup_logger()
+    logger.info("Bot started")
+    # Trading loop logic here
 
 def get_data():
-    # Replace with real market data fetch
-    return {"price": random.uniform(90, 110)}
+    # Replace with actual data retrieval
+    return {"prices": [100, 101, 102]}
 
-def decide_action(model, data):
-    return model.predict(data)
+def load_model():
+    # Replace with actual model loading
+    return "dummy_model"
 
-def execute_trade(action, mode, logger):
-    if mode == "sandbox":
-        logger.info(f"[SANDBOX] Simulated trade: {action}")
-    elif mode == "live":
-        logger.info(f"[LIVE] Executed trade: {action}")
-    else:
-        logger.info(f"[DEFAULT] Action: {action}")
-
-def run_bot(mode="sandbox", config=None):
-    logger = setup_logger()
-    model = SimpleModel()
-
-    logger.info("Starting SAI Bot...")
-    logger.info(f"Mode: {mode}")
-    if config:
-        logger.info(f"Config loaded: {config}")
-
-    try:
-        while True:
-            data = get_data()
-            action = decide_action(model, data)
-            execute_trade(action, mode, logger)
-            time.sleep(2)  # loop delay
-    except KeyboardInterrupt:
-        logger.info("Bot stopped by user.")
+def test_model(model, data):
+    # Replace with actual testing logic
+    return {"model": model, "data": data, "result": "success"}

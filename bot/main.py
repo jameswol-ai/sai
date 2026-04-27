@@ -1,5 +1,17 @@
 # sai/bot/main.py
 
+from bot.memory import TradeMemory
+from bot.learning import StrategyLearner
+
+memory = TradeMemory()
+learner = StrategyLearner()
+
+def on_trade_complete(trade):
+    pnl = trade["pnl"]
+
+    memory.log(trade)
+    learner.update(trade["signal_used"], pnl)
+
 """
 Core trading bot logic for SAI.
 Provides run_bot() entry point with mode and config support.

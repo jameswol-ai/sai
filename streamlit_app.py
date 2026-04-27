@@ -1,48 +1,60 @@
 # sai/streamlit_app.py
 
 import streamlit as st
-import pandas as pd
 import matplotlib.pyplot as plt
 
-# Import from your package
+# Proper absolute imports from sai package
 from sai.bot.main import run_bot, get_data, decide_action, SimpleModel
 from sai.utils import setup_logger
 
-# Configure logging
-logger = setup_logger("streamlit_app")
-
-st.set_page_config(page_title="SAI Trading Bot Dashboard", layout="wide")
+# Configure logger
+logger = setup_logger("sai_streamlit")
 
 def main():
-    st.title("📈 SAI Trading Bot Dashboard")
+    st.title("SAI Trading Bot Dashboard")
 
     # Sidebar controls
     st.sidebar.header("Controls")
     if st.sidebar.button("Run Bot"):
-        logger.info("Running bot from Streamlit UI")
-        run_bot()
+        action = run_bot()
+        st.success(f"Bot Action: {action}")
+        logger.info(f"Bot executed action: {action}")
 
     if st.sidebar.button("Refresh Data"):
-        logger.info("Refreshing market data")
         data = get_data()
-        st.session_state["data"] = data
+        st.write("Latest Data Snapshot:", data)
+        logger.info("Data refreshed")
 
-    # Display market data
-    if "data" in st.session_state:
-        st.subheader("Market Data Snapshot")
-        df = pd.DataFrame(st.session_state["data"])
-        st.dataframe(df)
+        # Plot data if numeric
+        if isinstance(data, (list, tuple)) and all(isinstance(x, (int, float)) for x in data):
+            fig, ax = plt.subplots()
+            ax.plot(data, marker="o", linestyle="-", color="blue")
+            ax.set_title("Market Data Trend")
+            ax.set_xlabel("Index")
+            ax.set_ylabel("Value")
+            st.pyplot(fig)
 
-        # Predictions
+    if st.sidebar.button("Decide Action"):
+        data = get_data()
+        action = decide_action(data)
+        st.info(f"Bot Decision: {action}")
+        logger.info(f"Decision made: {action}")
+
+    if st.sidebar.button("Test Model"):
         model = SimpleModel()
-        predictions = model.predict(df)
-        st.subheader("Predictions")
-        st.line_chart(predictions)
+        sample_data = get_data()
+        prediction = model.predict(sample_data)
+        st.write("Model Prediction:", prediction)
+        logger.info(f"Model prediction: {prediction}")
 
-        # Actions
-        actions = [decide_action(p) for p in predictions]
-        st.subheader("Trading Decisions")
-        st.bar_chart(pd.Series(actions).value_counts())
+    # Extra visualization: distribution of actions
+    st.subheader("Action Distribution Example")
+    actions = ["BUY", "SELL", "HOLD"]
+    counts = [5, 3, 7]  # Replace with real metrics if available
+    fig, ax = plt.subplots()
+    ax.bar(actions, counts, color=["green", "red", "gray"])
+    ax.set_title("Action Distribution")
+    st.pyplot(fig)
 
 if __name__ == "__main__":
     main()

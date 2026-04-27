@@ -25,3 +25,6 @@ jobs:
 
       - name: Run bot
         run: python bot/main.py
+
+- name: Dry-run trading loop
+  run: python sai/bot/run_bot.py --dry-run

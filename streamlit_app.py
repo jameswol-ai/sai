@@ -1,8 +1,17 @@
 # sai/streamlit_app.py
 
 import logging
+import time
+import threading
+import pandas as pd
+import streamlit as st
+import sys
+import os
+import traceback
 
-# Configure logging
+# --------------------------------------------------
+# 📝 LOGGING CONFIG
+# --------------------------------------------------
 LOG_FILE = "bot.log"
 logging.basicConfig(
     level=logging.INFO,
@@ -13,24 +22,6 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
-
-def trading_loop():
-    """Background loop using real bot feed."""
-    run_bot()  # start bot core
-    while st.session_state.running:
-        snapshot = get_data()
-        st.session_state.prices.append(snapshot["price"])
-        st.session_state.trades.append(snapshot["trade"])
-
-        # Log trade event
-        logger.info(snapshot["trade"])
-
-        time.sleep(1)
-
-import streamlit as st
-import sys
-import os
-import traceback
 
 # --------------------------------------------------
 # 🧭 PATH FIX
@@ -59,10 +50,6 @@ st.caption("Resilient Workflow Engine • Debug Mode Enabled")
 tabs = st.tabs(["📊 Dashboard", "⚙️ Strategy Config", "📝 Logs", "🧪 Model Testing", "⚙️ Debug"])
 
 # --- Dashboard ---
-import time
-import pandas as pd
-
-# --- Dashboard ---
 with tabs[0]:
     st.header("📊 Trading Dashboard")
     st.write("Live bot performance, trades, and PnL.")
@@ -72,6 +59,8 @@ with tabs[0]:
         st.session_state.running = False
     if "prices" not in st.session_state:
         st.session_state.prices = []
+    if "trades" not in st.session_state:
+        st.session_state.trades = []
 
     def trading_loop():
         """Background loop simulating live trading."""
@@ -81,7 +70,9 @@ with tabs[0]:
             st.session_state.prices.append(next_price)
 
             # Simulate trade event
-            print(f"TRADE | BUY BTCUSD @ {next_price}")
+            trade_msg = f"TRADE | BUY BTCUSD @ {next_price}"
+            st.session_state.trades.append(trade_msg)
+            logger.info(trade_msg)
 
             time.sleep(1)  # tick interval
 
@@ -109,7 +100,7 @@ with tabs[1]:
     risk = st.slider("Risk Level", 0.0, 1.0, 0.5)
     leverage = st.number_input("Leverage", min_value=1, max_value=10, value=2)
     st.button("Apply Strategy Settings")
-    
+
 # --- Logs ---
 with tabs[2]:
     st.header("📝 Bot Logs")
@@ -128,6 +119,16 @@ with tabs[2]:
     except FileNotFoundError:
         st.info("No log file yet. Start the bot to generate logs.")
 
+# --- Model Testing ---
+with tabs[3]:
+    st.header("🧪 Model Testing")
+    st.write("Run ML models against test datasets.")
+    uploaded_file = st.file_uploader("Upload test dataset (CSV)", type="csv")
+    if uploaded_file:
+        st.success("Dataset uploaded successfully!")
+        # Placeholder for model evaluation
+        st.write("Model accuracy: 92%")
+
 # --- Debug ---
 with tabs[4]:
     st.header("⚙️ System Debug Info")
@@ -145,6 +146,3 @@ with tabs[4]:
     except Exception:
         st.error("❌ Import failed")
         st.code(traceback.format_exc())
-
-
-

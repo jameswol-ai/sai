@@ -46,3 +46,6 @@ jobs:
 
       - name: Run unit tests
         run: pytest -q --disable-warnings
+
+- name: Run trader unit tests
+  run: pytest tests/test_trader.py -q --disable-warnings

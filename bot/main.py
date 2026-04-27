@@ -6,7 +6,7 @@ from sai.utils import setup_logger
 logger = setup_logger("sai_bot")
 
 class SimpleModel:
-    """A very basic model for demonstration purposes."""
+    """Basic demo model for trading decisions."""
     def predict(self, data):
         if not data:
             return "HOLD"
@@ -14,12 +14,11 @@ class SimpleModel:
         return "BUY" if avg > 0 else "SELL"
 
 def get_data():
-    """Stub for fetching market data. Replace with real data pipeline."""
-    # Example numeric data
+    """Stub for fetching market data. Replace with real pipeline later."""
     return [10, -5, 15, 20, -2]
 
 def decide_action(data):
-    """Decide trading action based on data."""
+    """Decide trading action based on average value."""
     if not data:
         return "HOLD"
     avg = sum(data) / len(data)
@@ -35,3 +34,4 @@ def run_bot():
     action = decide_action(data)
     logger.info(f"Bot decided action: {action}")
     return action
+    

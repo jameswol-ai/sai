@@ -79,6 +79,7 @@ with tabs[2]:
 
 # --- Model Testing ---
 from sai.models.registry.list_models import list_models
+from sai.models.registry.rollback_model import rollback_model
 
 with tabs[3]:
     st.header("Model Testing")
@@ -88,7 +89,7 @@ with tabs[3]:
     model_options = [m["id"] for m in models] if models else []
     active_model = next((m for m in models if m.get("active")), None)
 
-    # Show dropdown for model selection
+    # Dropdown for model selection
     selected_model_id = st.selectbox(
         "Select a model to test",
         options=model_options,
@@ -98,9 +99,27 @@ with tabs[3]:
     if selected_model_id:
         selected_model_path = next(m["path"] for m in models if m["id"] == selected_model_id)
         st.success(f"Selected model: {selected_model_id} ({selected_model_path})")
+
+        # Button to set selected model as active
+        if st.button("Set Active Model"):
+            rollback_model(selected_model_id)
+            st.success(f"Model {selected_model_id} is now active.")
+
     else:
         st.warning("No models registered. Defaulting to model.pkl")
         selected_model_path = "model.pkl"
+
+    # Upload dataset and run predictions
+    uploaded = st.file_uploader("Upload CSV dataset", type="csv")
+    if uploaded:
+        df = pd.read_csv(uploaded)
+        model = load_model(selected_model_path)
+        preds = model.predict(df.drop("target", axis=1))
+        st.line_chart(preds)
+
+    if st.button("Save Current Model"):
+        save_model(st.session_state.bot.model, "model.pkl")
+        st.success("Model saved and ready for registration.")
 
     # Upload dataset and run predictions
     uploaded = st.file_uploader("Upload CSV dataset", type="csv")

@@ -1,5 +1,32 @@
 # sai/streamlit_app.py
 
+import logging
+
+# Configure logging
+LOG_FILE = "bot.log"
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    handlers=[
+        logging.FileHandler(LOG_FILE),   # persistent file
+        logging.StreamHandler()          # console (shows in Streamlit logs)
+    ]
+)
+logger = logging.getLogger(__name__)
+
+def trading_loop():
+    """Background loop using real bot feed."""
+    run_bot()  # start bot core
+    while st.session_state.running:
+        snapshot = get_data()
+        st.session_state.prices.append(snapshot["price"])
+        st.session_state.trades.append(snapshot["trade"])
+
+        # Log trade event
+        logger.info(snapshot["trade"])
+
+        time.sleep(1)
+
 import streamlit as st
 import sys
 import os
@@ -34,6 +61,7 @@ tabs = st.tabs(["📊 Dashboard", "⚙️ Strategy Config", "📝 Logs", "🧪 M
 # --- Dashboard ---
 import time
 import pandas as pd
+
 # --- Dashboard ---
 with tabs[0]:
     st.header("📊 Trading Dashboard")
@@ -81,22 +109,25 @@ with tabs[1]:
     risk = st.slider("Risk Level", 0.0, 1.0, 0.5)
     leverage = st.number_input("Leverage", min_value=1, max_value=10, value=2)
     st.button("Apply Strategy Settings")
-
+    
 # --- Logs ---
 with tabs[2]:
     st.header("📝 Bot Logs")
-    st.write("Real-time trade events and system messages.")
 
-    if "trades" not in st.session_state:
-        st.session_state.trades = []
-
+    # Show recent trades from session state
     if st.session_state.trades:
-        # Show the last N trades
+        st.subheader("Recent Trades")
         st.text("\n".join(st.session_state.trades[-20:]))
 
-    else:
-        st.info("No trades yet. Start the bot from the Dashboard tab.")
-        
+    # Show raw log file tail
+    st.subheader("System Log File Tail")
+    try:
+        with open(LOG_FILE, "r") as f:
+            lines = f.readlines()[-20:]  # last 20 lines
+        st.text("".join(lines))
+    except FileNotFoundError:
+        st.info("No log file yet. Start the bot to generate logs.")
+
 # --- Debug ---
 with tabs[4]:
     st.header("⚙️ System Debug Info")

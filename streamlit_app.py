@@ -85,20 +85,18 @@ with tabs[1]:
 # --- Logs ---
 with tabs[2]:
     st.header("📝 Bot Logs")
-    st.write("Real-time log streaming or file tail.")
-    # Example log lines
-    st.text("2026-04-27 14:15:01 | INFO | Bot started\n2026-04-27 14:15:05 | TRADE | BUY BTCUSD")
+    st.write("Real-time trade events and system messages.")
 
-# --- Model Testing ---
-with tabs[3]:
-    st.header("🧪 Model Testing")
-    st.write("Run ML models against test datasets.")
-    uploaded_file = st.file_uploader("Upload test dataset (CSV)", type="csv")
-    if uploaded_file:
-        st.success("Dataset uploaded successfully!")
-        # Placeholder for model evaluation
-        st.write("Model accuracy: 92%")
+    if "trades" not in st.session_state:
+        st.session_state.trades = []
 
+    if st.session_state.trades:
+        # Show the last N trades
+        st.text("\n".join(st.session_state.trades[-20:]))
+
+    else:
+        st.info("No trades yet. Start the bot from the Dashboard tab.")
+        
 # --- Debug ---
 with tabs[4]:
     st.header("⚙️ System Debug Info")

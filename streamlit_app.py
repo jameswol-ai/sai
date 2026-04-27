@@ -78,17 +78,41 @@ with tabs[2]:
         st.text_area("Logs", f.read(), height=400)
 
 # --- Model Testing ---
+from sai.models.registry.list_models import list_models
+
 with tabs[3]:
     st.header("Model Testing")
+
+    # Load all models from registry
+    models = list_models()
+    model_options = [m["id"] for m in models] if models else []
+    active_model = next((m for m in models if m.get("active")), None)
+
+    # Show dropdown for model selection
+    selected_model_id = st.selectbox(
+        "Select a model to test",
+        options=model_options,
+        index=model_options.index(active_model["id"]) if active_model else 0
+    ) if model_options else None
+
+    if selected_model_id:
+        selected_model_path = next(m["path"] for m in models if m["id"] == selected_model_id)
+        st.success(f"Selected model: {selected_model_id} ({selected_model_path})")
+    else:
+        st.warning("No models registered. Defaulting to model.pkl")
+        selected_model_path = "model.pkl"
+
+    # Upload dataset and run predictions
     uploaded = st.file_uploader("Upload CSV dataset", type="csv")
     if uploaded:
         df = pd.read_csv(uploaded)
-        model = load_model("model.pkl")
+        model = load_model(selected_model_path)
         preds = model.predict(df.drop("target", axis=1))
         st.line_chart(preds)
+
     if st.button("Save Current Model"):
         save_model(st.session_state.bot.model, "model.pkl")
-        st.success("Model saved.")
+        st.success("Model saved and ready for registration.")
 
 # --- Model Testing ---
 # --- Model Testing ---

@@ -4,7 +4,7 @@ import time
 import threading
 from prometheus_client import Gauge, Counter, start_http_server
 
-# Define Prometheus metrics
+# Prometheus metrics
 pnl_total = Gauge("sai_pnl_total", "Total Profit and Loss")
 trades_per_minute = Gauge("sai_trades_per_minute", "Trades executed per minute")
 trade_latency = Gauge("sai_trade_latency_seconds", "Latency per trade in seconds")
@@ -12,14 +12,13 @@ open_positions = Gauge("sai_open_positions", "Number of open positions")
 model_version = Gauge("sai_model_version", "Current ML model version")
 trade_counter = Counter("sai_trade_count", "Total trades executed")
 
-# Data storage for charts
+# Data storage
 pnl_history, trade_freq_history, timestamps = [], [], []
 
 # Background metrics server
 def start_metrics_server():
     start_http_server(8000)
     while True:
-        # Replace with live trading loop values
         pnl_value = 1250.75
         trades_value = 5
         latency_value = 0.85
@@ -33,7 +32,6 @@ def start_metrics_server():
         model_version.set(model_value)
         trade_counter.inc()
 
-        # Append to history for charts
         timestamps.append(time.strftime("%H:%M:%S"))
         pnl_history.append(pnl_value)
         trade_freq_history.append(trades_value)
@@ -42,55 +40,54 @@ def start_metrics_server():
 
 threading.Thread(target=start_metrics_server, daemon=True).start()
 
-# Streamlit UI
-st.title("SAI Trading Bot Dashboard")
+# Tabs
+tab1, tab2, tab3, tab4 = st.tabs(["📊 Dashboard", "⚠️ Risk Monitor", "📝 Logs", "⚙️ Config"])
 
-# Risk Status Summary
-risk_status = "Healthy"
-risk_color = "✅ GREEN"
+with tab1:
+    st.title("Trading Dashboard")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("PnL ($)", f"{pnl_total._value.get():.2f}")
+    col2.metric("Trades/min", f"{trades_per_minute._value.get():.0f}")
+    col3.metric("Latency (s)", f"{trade_latency._value.get():.2f}")
+    st.metric("Open Positions", f"{open_positions._value.get():.0f}")
+    st.metric("Model Version", f"{model_version._value.get():.0f}")
+    st.metric("Total Trades", f"{trade_counter._value.get():.0f}")
 
-if pnl_total._value.get() < -1000 or trade_latency._value.get() > 2.0 or open_positions._value.get() > 10:
-    risk_status = "Critical"
-    risk_color = "🚨 RED"
-elif pnl_total._value.get() < 0 or trade_latency._value.get() > 1.0 or open_positions._value.get() > 5:
-    risk_status = "Warning"
-    risk_color = "⚠️ YELLOW"
+    if len(timestamps) > 1:
+        df = pd.DataFrame({
+            "Timestamp": timestamps,
+            "PnL": pnl_history,
+            "Trades/min": trade_freq_history
+        })
+        st.line_chart(df.set_index("Timestamp")[["PnL"]])
+        st.line_chart(df.set_index("Timestamp")[["Trades/min"]])
 
-st.subheader("Overall Risk Status")
-st.write(f"{risk_color} — {risk_status}")
+with tab2:
+    st.title("Risk Monitor")
+    risk_status = "Healthy"
+    risk_color = "✅ GREEN"
+    if pnl_total._value.get() < -1000 or trade_latency._value.get() > 2.0 or open_positions._value.get() > 10:
+        risk_status = "Critical"
+        risk_color = "🚨 RED"
+    elif pnl_total._value.get() < 0 or trade_latency._value.get() > 1.0 or open_positions._value.get() > 5:
+        risk_status = "Warning"
+        risk_color = "⚠️ YELLOW"
+    st.subheader("Overall Risk Status")
+    st.write(f"{risk_color} — {risk_status}")
 
-# Alerts section
-if pnl_total._value.get() < -1000:
-    st.error("🚨 CRITICAL: Losses exceed $1000! Immediate action required.")
-elif pnl_total._value.get() < 0:
-    st.warning("⚠️ Warning: Bot is currently running at a loss.")
+    if pnl_total._value.get() < -1000:
+        st.error("🚨 CRITICAL: Losses exceed $1000! Immediate action required.")
+    elif pnl_total._value.get() < 0:
+        st.warning("⚠️ Bot is currently running at a loss.")
+    if trade_latency._value.get() > 2.0:
+        st.warning("⚠️ High latency detected (>2s per trade).")
+    if open_positions._value.get() > 10:
+        st.warning("⚠️ Too many open positions. Risk exposure is high.")
 
-if trade_latency._value.get() > 2.0:
-    st.warning("⚠️ High latency detected (>2s per trade).")
+with tab3:
+    st.title("Logs")
+    st.write("📜 Trading logs will be displayed here (hook into logging module).")
 
-if open_positions._value.get() > 10:
-    st.warning("⚠️ Too many open positions. Risk exposure is high.")
-
-# Metrics
-col1, col2, col3 = st.columns(3)
-col1.metric("PnL ($)", f"{pnl_total._value.get():.2f}")
-col2.metric("Trades/min", f"{trades_per_minute._value.get():.0f}")
-col3.metric("Latency (s)", f"{trade_latency._value.get():.2f}")
-
-st.metric("Open Positions", f"{open_positions._value.get():.0f}")
-st.metric("Model Version", f"{model_version._value.get():.0f}")
-st.metric("Total Trades", f"{trade_counter._value.get():.0f}")
-
-# Charts
-if len(timestamps) > 1:
-    df = pd.DataFrame({
-        "Timestamp": timestamps,
-        "PnL": pnl_history,
-        "Trades/min": trade_freq_history
-    })
-
-    st.subheader("PnL Trend")
-    st.line_chart(df.set_index("Timestamp")[["PnL"]])
-
-    st.subheader("Trade Frequency Trend")
-    st.line_chart(df.set_index("Timestamp")[["Trades/min"]])
+with tab4:
+    st.title("Config")
+    st.write("⚙️ Strategy and risk configuration options go here.")

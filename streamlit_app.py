@@ -4,8 +4,7 @@ import streamlit as st
 import threading, time, logging, subprocess, json
 import pandas as pd
 import matplotlib.pyplot as plt
-from sai.core.trading.trading import TradingBot
-from sai.core.models import load_model, save_model
+
 from sai.models.registry.register_model import register_model
 from sai.models.registry.list_models import list_models
 from sai.models.registry.rollback_model import rollback_model

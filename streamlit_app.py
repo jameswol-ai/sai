@@ -1,98 +1,84 @@
 # sai/streamlit_app.py
 
 import streamlit as st
-import logging
-import threading
+import pandas as pd
 import time
-import matplotlib.pyplot as plt
+import threading
+from prometheus_client import Gauge, Counter, start_http_server
 
-# Correct imports from sai.bot.main
-from sai.bot.main import run_bot, get_data, decide_action, SimpleModel
+# Define Prometheus metrics
+pnl_total = Gauge("sai_pnl_total", "Total Profit and Loss")
+trades_per_minute = Gauge("sai_trades_per_minute", "Trades executed per minute")
+trade_latency = Gauge("sai_trade_latency_seconds", "Latency per trade in seconds")
+open_positions = Gauge("sai_open_positions", "Number of open positions")
+model_version = Gauge("sai_model_version", "Current ML model version")
+trade_counter = Counter("sai_trade_count", "Total trades executed")
 
-# Configure logging
-logging.basicConfig(
-    filename="sai_streamlit.log",
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
+# Data storage for charts
+pnl_history, trade_freq_history, timestamps = [], [], []
 
-# Initialize session state
-if "trading" not in st.session_state:
-    st.session_state.trading = False
-if "model" not in st.session_state:
-    st.session_state.model = SimpleModel()
+# Background metrics server
+def start_metrics_server():
+    start_http_server(8000)
+    while True:
+        # Replace with live trading loop values
+        pnl_value = 1250.75
+        trades_value = 5
+        latency_value = 0.85
+        positions_value = 3
+        model_value = 20260427
 
-# Dashboard tab
-def dashboard_tab():
-    st.header("📊 Live Trading Dashboard")
+        pnl_total.set(pnl_value)
+        trades_per_minute.set(trades_value)
+        trade_latency.set(latency_value)
+        open_positions.set(positions_value)
+        model_version.set(model_value)
+        trade_counter.inc()
 
-    if st.button("Start Trading"):
-        st.session_state.trading = True
-        threading.Thread(target=live_trading_loop, daemon=True).start()
+        # Append to history for charts
+        timestamps.append(time.strftime("%H:%M:%S"))
+        pnl_history.append(pnl_value)
+        trade_freq_history.append(trades_value)
 
-    if st.button("Stop Trading"):
-        st.session_state.trading = False
+        time.sleep(15)
 
-    st.line_chart(st.session_state.get("prices", []))
+threading.Thread(target=start_metrics_server, daemon=True).start()
 
-# Strategy Config tab
-def strategy_tab():
-    st.header("⚙️ Strategy Configuration")
-    param = st.slider("Decision Threshold", 0.0, 1.0, 0.5)
-    st.session_state.model.threshold = param
-    st.write(f"Model threshold set to {param}")
+# Streamlit UI
+st.title("SAI Trading Bot Dashboard")
 
-# Logs tab
-def logs_tab():
-    st.header("📝 Logs")
-    try:
-        with open("sai_streamlit.log", "r") as f:
-            st.text(f.read())
-    except FileNotFoundError:
-        st.write("No logs yet.")
+# Alerts section
+if pnl_total._value.get() < -1000:
+    st.error("🚨 CRITICAL: Losses exceed $1000! Immediate action required.")
+elif pnl_total._value.get() < 0:
+    st.warning("⚠️ Warning: Bot is currently running at a loss.")
 
-# Model Testing tab
-def model_tab():
-    st.header("🧪 Model Testing")
-    data = get_data()
-    prediction = st.session_state.model.predict(data)
-    st.write(f"Prediction: {prediction}")
+if trade_latency._value.get() > 2.0:
+    st.warning("⚠️ High latency detected (>2s per trade).")
 
-# Debug tab
-def debug_tab():
-    st.header("🐞 Debug Info")
-    st.json({
-        "trading": st.session_state.trading,
-        "model_params": vars(st.session_state.model)
+if open_positions._value.get() > 10:
+    st.warning("⚠️ Too many open positions. Risk exposure is high.")
+
+# Metrics
+col1, col2, col3 = st.columns(3)
+col1.metric("PnL ($)", f"{pnl_total._value.get():.2f}")
+col2.metric("Trades/min", f"{trades_per_minute._value.get():.0f}")
+col3.metric("Latency (s)", f"{trade_latency._value.get():.2f}")
+
+st.metric("Open Positions", f"{open_positions._value.get():.0f}")
+st.metric("Model Version", f"{model_version._value.get():.0f}")
+st.metric("Total Trades", f"{trade_counter._value.get():.0f}")
+
+# Charts with conditional highlighting
+if len(timestamps) > 1:
+    df = pd.DataFrame({
+        "Timestamp": timestamps,
+        "PnL": pnl_history,
+        "Trades/min": trade_freq_history
     })
 
-# Live trading loop
-def live_trading_loop():
-    while st.session_state.trading:
-        data = get_data()
-        action = decide_action(data, st.session_state.model)
-        run_bot(action)
-        logging.info(f"Action taken: {action}")
-        prices = st.session_state.get("prices", [])
-        prices.append(data["price"])
-        st.session_state["prices"] = prices[-50:]  # keep last 50
-        time.sleep(2)
+    st.subheader("PnL Trend")
+    st.line_chart(df.set_index("Timestamp")[["PnL"]])
 
-# Main app
-def main():
-    st.title("SAI Trading Bot")
-    tab = st.sidebar.radio("Navigation", ["Dashboard", "Strategy Config", "Logs", "Model Testing", "Debug"])
-
-    if tab == "Dashboard":
-        dashboard_tab()
-    elif tab == "Strategy Config":
-        strategy_tab()
-    elif tab == "Logs":
-        logs_tab()
-    elif tab == "Model Testing":
-        model_tab()
-    elif tab == "Debug":
-        debug_tab()
-
-if __name__ == "__main__":
-    main()
+    st.subheader("Trade Frequency Trend")
+    st.line_chart(df.set_index("Timestamp")[["Trades/min"]])

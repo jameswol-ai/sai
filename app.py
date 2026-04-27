@@ -2,9 +2,28 @@ import streamlit as st
 import pandas as pd
 import time
 import threading
+import logging
 from prometheus_client import Gauge, Counter, start_http_server
 
-# Prometheus metrics
+# --- Logging Setup ---
+LOG_FILE = "logs/trading.log"
+logging.basicConfig(
+    filename=LOG_FILE,
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger("sai_trading_bot")
+
+# Example log generator (replace with real trading loop logs)
+def generate_logs():
+    while True:
+        logger.info("Executed trade at simulated price 100.25")
+        logger.warning("Latency spike detected: 2.3s")
+        time.sleep(20)
+
+threading.Thread(target=generate_logs, daemon=True).start()
+
+# --- Prometheus Metrics ---
 pnl_total = Gauge("sai_pnl_total", "Total Profit and Loss")
 trades_per_minute = Gauge("sai_trades_per_minute", "Trades executed per minute")
 trade_latency = Gauge("sai_trade_latency_seconds", "Latency per trade in seconds")
@@ -12,10 +31,8 @@ open_positions = Gauge("sai_open_positions", "Number of open positions")
 model_version = Gauge("sai_model_version", "Current ML model version")
 trade_counter = Counter("sai_trade_count", "Total trades executed")
 
-# Data storage
 pnl_history, trade_freq_history, timestamps = [], [], []
 
-# Background metrics server
 def start_metrics_server():
     start_http_server(8000)
     while True:
@@ -40,7 +57,7 @@ def start_metrics_server():
 
 threading.Thread(target=start_metrics_server, daemon=True).start()
 
-# Tabs
+# --- Tabs Layout ---
 tab1, tab2, tab3, tab4 = st.tabs(["📊 Dashboard", "⚠️ Risk Monitor", "📝 Logs", "⚙️ Config"])
 
 with tab1:
@@ -86,7 +103,12 @@ with tab2:
 
 with tab3:
     st.title("Logs")
-    st.write("📜 Trading logs will be displayed here (hook into logging module).")
+    try:
+        with open(LOG_FILE, "r") as f:
+            logs = f.readlines()[-20:]  # Show last 20 log entries
+        st.text_area("Recent Logs", "".join(logs), height=300)
+    except FileNotFoundError:
+        st.info("No logs available yet.")
 
 with tab4:
     st.title("Config")

@@ -90,19 +90,37 @@ with tabs[3]:
         save_model(st.session_state.bot.model, "model.pkl")
         st.success("Model saved.")
 
-# --- Model Registry ---
-with tabs[4]:
-    st.header("Model Registry")
-    if st.button("Register Current Model"):
-        register_model("model.pkl")
-        st.success("Model registered.")
-    if st.button("List Models"):
-        models = list_models()
-        st.json(models)
-    rollback_id = st.text_input("Rollback to model ID")
-    if st.button("Rollback Model") and rollback_id:
-        rollback_model(rollback_id)
-        st.success(f"Rolled back to {rollback_id}")
+# --- Model Testing ---
+# --- Model Testing ---
+from sai.models.registry.list_models import list_models
+
+with tabs[3]:
+    st.header("Model Testing")
+
+    # Find active model from registry
+    active_model = None
+    models = list_models()
+    for m in models:
+        if m.get("active"):
+            active_model = m["path"]
+            break
+
+    if active_model:
+        st.success(f"Active model: {active_model}")
+    else:
+        st.warning("No active model found. Defaulting to model.pkl")
+        active_model = "model.pkl"
+
+    uploaded = st.file_uploader("Upload CSV dataset", type="csv")
+    if uploaded:
+        df = pd.read_csv(uploaded)
+        model = load_model(active_model)
+        preds = model.predict(df.drop("target", axis=1))
+        st.line_chart(preds)
+
+    if st.button("Save Current Model"):
+        save_model(st.session_state.bot.model, "model.pkl")
+        st.success("Model saved and ready for registration.")
 
 # --- Monitoring ---
 with tabs[5]:

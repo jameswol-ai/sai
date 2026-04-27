@@ -3,11 +3,9 @@
 import streamlit as st
 import matplotlib.pyplot as plt
 
-# Proper absolute imports from sai package
 from sai.bot.main import run_bot, get_data, decide_action, SimpleModel
 from sai.utils import setup_logger
 
-# Configure logger
 logger = setup_logger("sai_streamlit")
 
 def main():
@@ -25,7 +23,7 @@ def main():
         st.write("Latest Data Snapshot:", data)
         logger.info("Data refreshed")
 
-        # Plot data if numeric
+        # Plot numeric data
         if isinstance(data, (list, tuple)) and all(isinstance(x, (int, float)) for x in data):
             fig, ax = plt.subplots()
             ax.plot(data, marker="o", linestyle="-", color="blue")

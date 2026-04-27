@@ -1,94 +1,65 @@
 # sai/streamlit_app.py
-
 import streamlit as st
+import threading
 import time
-import pandas as pd
-from bot.memory import TradeMemory
-from bot.learning import StrategyLearner
 
-# ─────────────────────────────
-# INIT SAi CORE
-# ─────────────────────────────
-memory = TradeMemory()
-learner = StrategyLearner()
+from sai.bot.main import run_bot, get_data, decide_action, SimpleModel
+from sai.utils import setup_logger
 
-st.set_page_config(page_title="SAi Evolution Dashboard", layout="wide")
+# Initialize logger
+logger = setup_logger("streamlit_app")
 
-st.title("🧠 SAi — Live Learning Dashboard")
-st.caption("Watching intelligence evolve in real time")
+# Tabs
+tabs = ["Dashboard", "Strategy Config", "Logs", "Model Testing", "Debug"]
+selected_tab = st.sidebar.radio("Navigation", tabs)
 
-# ─────────────────────────────
-# LOAD DATA
-# ─────────────────────────────
-data = memory.load()
+# Shared state
+if "trading_thread" not in st.session_state:
+    st.session_state.trading_thread = None
+if "logs" not in st.session_state:
+    st.session_state.logs = []
 
-if not data:
-    st.warning("No trades yet. SAi is waiting for experience...")
-    st.stop()
+def trading_loop():
+    while True:
+        try:
+            data = get_data()
+            action = decide_action(data)
+            result = run_bot(action)
+            st.session_state.logs.append(f"{time.ctime()}: {result}")
+            time.sleep(2)
+        except Exception as e:
+            logger.error(f"Trading loop error: {e}")
+            break
 
-df = pd.DataFrame(data)
+# Dashboard tab
+if selected_tab == "Dashboard":
+    st.title("SAI Trading Bot Dashboard")
+    if st.button("Start Live Trading"):
+        if st.session_state.trading_thread is None or not st.session_state.trading_thread.is_alive():
+            st.session_state.trading_thread = threading.Thread(target=trading_loop, daemon=True)
+            st.session_state.trading_thread.start()
+            st.success("Live trading started.")
+    st.line_chart([1, 2, 3, 4])  # placeholder chart
 
-# ─────────────────────────────
-# SIDEBAR — SYSTEM STATE
-# ─────────────────────────────
-st.sidebar.header("⚙️ SAi State")
+# Strategy Config tab
+elif selected_tab == "Strategy Config":
+    st.title("Configure Strategy")
+    param = st.text_input("Parameter")
+    st.write(f"Current parameter: {param}")
 
-st.sidebar.metric("Total Trades", len(df))
-st.sidebar.metric("Last PnL", df.iloc[-1]["pnl"])
+# Logs tab
+elif selected_tab == "Logs":
+    st.title("Logs")
+    for log in st.session_state.logs[-50:]:
+        st.text(log)
 
-win_rate = (df["pnl"] > 0).mean() * 100
-st.sidebar.metric("Win Rate", f"{win_rate:.2f}%")
+# Model Testing tab
+elif selected_tab == "Model Testing":
+    st.title("Test Model")
+    model = SimpleModel()
+    st.write("Model prediction:", model.predict([[1, 2, 3]]))
 
-st.sidebar.markdown("### 🧠 Strategy Weights")
-weights = learner.get_weights()
-st.sidebar.json(weights)
-
-# ─────────────────────────────
-# MAIN VISUALIZATION
-# ─────────────────────────────
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader("📈 Equity Evolution")
-    df["cumulative_pnl"] = df["pnl"].cumsum()
-    st.line_chart(df["cumulative_pnl"])
-
-with col2:
-    st.subheader("🎯 Trade Outcomes")
-    st.bar_chart(df["pnl"])
-
-# ─────────────────────────────
-# SIGNAL EVOLUTION
-# ─────────────────────────────
-st.subheader("🔁 Signal Memory (How SAi is learning)")
-
-if "signal_used" in df.columns:
-    st.dataframe(df[["timestamp", "signal_used", "pnl"]].tail(20))
-
-# ─────────────────────────────
-# LIVE SIMULATION MODE
-# ─────────────────────────────
-st.subheader("⚡ Live Evolution Feed")
-
-placeholder = st.empty()
-
-for i in range(10):
-    if len(df) > 0:
-        latest = df.iloc[-1]
-
-        placeholder.markdown(
-            f"""
-            ### 🧠 SAi Thinking…
-            - Last action: `{latest.get('signal_used', 'N/A')}`
-            - Outcome: `{latest['pnl']}`
-            - Learning adjustment active: ✅
-            """
-        )
-
-    time.sleep(1)
-
-# ─────────────────────────────
-# RAW MEMORY VIEW
-# ─────────────────────────────
-with st.expander("🧾 Raw Memory Log"):
-    st.json(data)
+# Debug tab
+elif selected_tab == "Debug":
+    st.title("Debug Info")
+    st.write(st.session_state)

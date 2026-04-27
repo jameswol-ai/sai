@@ -1,5 +1,8 @@
 # sai/streamlit_app.py
 
+from random.core.intent_engine import IntentEngine
+from random.core.city import City   # or memory, depending on your design
+
 import sys, os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 

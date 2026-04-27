@@ -257,7 +257,6 @@ def delete_model(model_id: str):
     else:
         registry = []
 
-    # Filter out the model to delete
     registry = [m for m in registry if m["id"] != model_id]
 
     with open(REGISTRY_FILE, "w") as f:

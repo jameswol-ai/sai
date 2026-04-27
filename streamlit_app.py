@@ -34,39 +34,45 @@ tabs = st.tabs(["📊 Dashboard", "⚙️ Strategy Config", "📝 Logs", "🧪 M
 # --- Dashboard ---
 import time
 import pandas as pd
-
 # --- Dashboard ---
 with tabs[0]:
     st.header("📊 Trading Dashboard")
     st.write("Live bot performance, trades, and PnL.")
 
-    # Containers for dynamic updates
-    price_chart = st.empty()
-    trade_log = st.empty()
-    pnl_display = st.empty()
+    # Shared state
+    if "running" not in st.session_state:
+        st.session_state.running = False
+    if "prices" not in st.session_state:
+        st.session_state.prices = []
 
-    # Example live loop (replace with real bot data)
-    if st.button("▶️ Start Live Bot"):
-        for i in range(20):  # simulate 20 ticks
-            # Simulated market data
-            prices = [100 + j*0.5 for j in range(i+1)]
-            df = pd.DataFrame({"Price": prices})
+    def trading_loop():
+        """Background loop simulating live trading."""
+        while st.session_state.running:
+            # Replace with real market feed
+            next_price = 100 + len(st.session_state.prices) * 0.5
+            st.session_state.prices.append(next_price)
 
-            # Update chart
-            price_chart.line_chart(df)
+            # Simulate trade event
+            print(f"TRADE | BUY BTCUSD @ {next_price}")
 
-            # Update trade log
-            trade_log.text(f"Tick {i} | TRADE | BUY BTCUSD @ {prices[-1]}")
+            time.sleep(1)  # tick interval
 
-            # Update PnL
-            pnl_display.metric("PnL", f"${round((prices[-1]-100)*10,2)}")
+    # Controls
+    start_btn = st.button("▶️ Start Live Bot")
+    stop_btn = st.button("⏹ Stop Bot")
 
-            time.sleep(1)  # refresh every second
-with tabs[0]:
-    st.header("📊 Trading Dashboard")
-    st.write("Overview of bot performance, PnL, and market data.")
-    # Example chart placeholder
-    st.line_chart({"Price": [100, 102, 105, 103, 108]})
+    if start_btn and not st.session_state.running:
+        st.session_state.running = True
+        threading.Thread(target=trading_loop, daemon=True).start()
+
+    if stop_btn:
+        st.session_state.running = False
+
+    # Render live data
+    if st.session_state.prices:
+        df = pd.DataFrame({"Price": st.session_state.prices})
+        st.line_chart(df)
+        st.metric("PnL", f"${round((st.session_state.prices[-1]-100)*10,2)}")
 
 # --- Strategy Config ---
 with tabs[1]:

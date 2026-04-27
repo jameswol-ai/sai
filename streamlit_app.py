@@ -182,6 +182,7 @@ with tabs[3]:
     if st.button("Save Current Model"):
         save_model(st.session_state.bot.model, "model.pkl")
         st.success("Model saved and ready for registration.")
+      
 # --- Monitoring ---
 with tabs[5]:
     st.header("Monitoring & Metrics")
@@ -239,3 +240,61 @@ def run_trading_loop():
         price_gauge.set(price)
 
         time.sleep(2)
+
+# --- Model Registry ---
+from sai.models.registry.register_model import register_model
+from sai.models.registry.list_models import list_models
+from sai.models.registry.rollback_model import rollback_model
+import json, os
+
+REGISTRY_FILE = os.path.join(os.path.dirname(__file__), "../models/registry/models_registry.json")
+
+def delete_model(model_id: str):
+    """Delete a model entry from the registry JSON file."""
+    if os.path.exists(REGISTRY_FILE):
+        with open(REGISTRY_FILE, "r") as f:
+            registry = json.load(f)
+    else:
+        registry = []
+
+    # Filter out the model to delete
+    registry = [m for m in registry if m["id"] != model_id]
+
+    with open(REGISTRY_FILE, "w") as f:
+        json.dump(registry, f, indent=2)
+
+    return {"status": "deleted", "model_id": model_id}
+
+with tabs[4]:
+    st.header("Model Registry")
+
+    # Register current model
+    if st.button("Register Current Model"):
+        register_model("model.pkl")
+        st.success("Model registered.")
+
+    # List models in a table
+    models = list_models()
+    if models:
+        table_data = []
+        for m in models:
+            table_data.append({
+                "Model ID": m["id"],
+                "Path": m["path"],
+                "Active": "✅" if m.get("active") else ""
+            })
+        st.table(table_data)
+    else:
+        st.warning("No models registered yet.")
+
+    # Rollback / set active
+    rollback_id = st.text_input("Enter model ID to set active")
+    if st.button("Set Active Model") and rollback_id:
+        rollback_model(rollback_id)
+        st.success(f"Model {rollback_id} is now active.")
+
+    # Delete model
+    delete_id = st.text_input("Enter model ID to delete")
+    if st.button("Delete Model") and delete_id:
+        result = delete_model(delete_id)
+        st.success(f"Model {delete_id} deleted from registry.")

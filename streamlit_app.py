@@ -1,4 +1,5 @@
 # sai/streamlit_app.py
+
 import streamlit as st
 import threading, time, logging, subprocess, json
 import pandas as pd
@@ -131,3 +132,31 @@ with tabs[7]:
 with tabs[8]:
     st.header("Debug Tools")
     st.json(st.session_state)
+
+from prometheus_client import Gauge, Counter, start_http_server
+
+# Prometheus metrics
+trade_counter = Counter("sai_trades_total", "Total number of trades executed")
+pnl_gauge = Gauge("sai_pnl", "Current profit and loss")
+price_gauge = Gauge("sai_price", "Latest market price")
+
+# Start Prometheus exporter on port 8000
+start_http_server(8000)
+
+def run_trading_loop():
+    while st.session_state.running:
+        price = 100 + (time.time() % 10)  # dummy price
+        action = st.session_state.bot.decide(price)
+        trade = {"time": time.time(), "price": price, "action": action, "pnl": (1 if action=="BUY" else -1)}
+        st.session_state.trades.append(trade)
+        st.session_state.prices = pd.concat([st.session_state.prices,
+                                             pd.DataFrame([{"time": trade["time"], "price": price}])])
+        logging.info(f"Trade executed: {trade}")
+
+        # Prometheus metrics update
+        trade_counter.inc()
+        pnl = sum([t["pnl"] for t in st.session_state.trades])
+        pnl_gauge.set(pnl)
+        price_gauge.set(price)
+
+        time.sleep(2)

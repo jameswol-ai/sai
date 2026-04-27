@@ -45,11 +45,29 @@ threading.Thread(target=start_metrics_server, daemon=True).start()
 # Streamlit UI
 st.title("SAI Trading Bot Dashboard")
 
-# Alerts
+# Risk Status Summary
+risk_status = "Healthy"
+risk_color = "✅ GREEN"
+
+if pnl_total._value.get() < -1000 or trade_latency._value.get() > 2.0 or open_positions._value.get() > 10:
+    risk_status = "Critical"
+    risk_color = "🚨 RED"
+elif pnl_total._value.get() < 0 or trade_latency._value.get() > 1.0 or open_positions._value.get() > 5:
+    risk_status = "Warning"
+    risk_color = "⚠️ YELLOW"
+
+st.subheader("Overall Risk Status")
+st.write(f"{risk_color} — {risk_status}")
+
+# Alerts section
 if pnl_total._value.get() < -1000:
-    st.error("⚠️ ALERT: Losses exceed $1000! Immediate review required.")
+    st.error("🚨 CRITICAL: Losses exceed $1000! Immediate action required.")
+elif pnl_total._value.get() < 0:
+    st.warning("⚠️ Warning: Bot is currently running at a loss.")
+
 if trade_latency._value.get() > 2.0:
     st.warning("⚠️ High latency detected (>2s per trade).")
+
 if open_positions._value.get() > 10:
     st.warning("⚠️ Too many open positions. Risk exposure is high.")
 
@@ -71,5 +89,8 @@ if len(timestamps) > 1:
         "Trades/min": trade_freq_history
     })
 
+    st.subheader("PnL Trend")
     st.line_chart(df.set_index("Timestamp")[["PnL"]])
+
+    st.subheader("Trade Frequency Trend")
     st.line_chart(df.set_index("Timestamp")[["Trades/min"]])

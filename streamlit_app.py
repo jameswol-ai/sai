@@ -134,37 +134,54 @@ with tabs[3]:
         st.success("Model saved and ready for registration.")
 
 # --- Model Testing ---
-# --- Model Testing ---
 from sai.models.registry.list_models import list_models
+from sai.models.registry.rollback_model import rollback_model
 
 with tabs[3]:
     st.header("Model Testing")
 
-    # Find active model from registry
-    active_model = None
+    # Load all models from registry
     models = list_models()
+    model_options = []
+    active_model = next((m for m in models if m.get("active")), None)
+
+    # Build dropdown options with checkmark for active model
     for m in models:
-        if m.get("active"):
-            active_model = m["path"]
-            break
+        label = f"{m['id']} ✅" if m.get("active") else m["id"]
+        model_options.append(label)
 
-    if active_model:
-        st.success(f"Active model: {active_model}")
+    # Dropdown for model selection
+    selected_label = st.selectbox(
+        "Select a model to test",
+        options=model_options,
+        index=model_options.index(f"{active_model['id']} ✅") if active_model else 0
+    ) if model_options else None
+
+    # Resolve selected model path
+    if selected_label:
+        selected_id = selected_label.replace(" ✅", "")
+        selected_model_path = next(m["path"] for m in models if m["id"] == selected_id)
+        st.success(f"Selected model: {selected_id} ({selected_model_path})")
+
+        # Button to set selected model as active
+        if st.button("Set Active Model"):
+            rollback_model(selected_id)
+            st.success(f"Model {selected_id} is now active.")
     else:
-        st.warning("No active model found. Defaulting to model.pkl")
-        active_model = "model.pkl"
+        st.warning("No models registered. Defaulting to model.pkl")
+        selected_model_path = "model.pkl"
 
+    # Upload dataset and run predictions
     uploaded = st.file_uploader("Upload CSV dataset", type="csv")
     if uploaded:
         df = pd.read_csv(uploaded)
-        model = load_model(active_model)
+        model = load_model(selected_model_path)
         preds = model.predict(df.drop("target", axis=1))
         st.line_chart(preds)
 
     if st.button("Save Current Model"):
         save_model(st.session_state.bot.model, "model.pkl")
         st.success("Model saved and ready for registration.")
-
 # --- Monitoring ---
 with tabs[5]:
     st.header("Monitoring & Metrics")

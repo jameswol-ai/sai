@@ -11,8 +11,8 @@ logger = setup_logger("sai_streamlit")
 def main():
     st.title("SAI Trading Bot Dashboard")
 
-    # Sidebar controls
     st.sidebar.header("Controls")
+
     if st.sidebar.button("Run Bot"):
         action = run_bot()
         st.success(f"Bot Action: {action}")
@@ -23,7 +23,6 @@ def main():
         st.write("Latest Data Snapshot:", data)
         logger.info("Data refreshed")
 
-        # Plot numeric data
         if isinstance(data, (list, tuple)) and all(isinstance(x, (int, float)) for x in data):
             fig, ax = plt.subplots()
             ax.plot(data, marker="o", linestyle="-", color="blue")
@@ -45,10 +44,9 @@ def main():
         st.write("Model Prediction:", prediction)
         logger.info(f"Model prediction: {prediction}")
 
-    # Extra visualization: distribution of actions
     st.subheader("Action Distribution Example")
     actions = ["BUY", "SELL", "HOLD"]
-    counts = [5, 3, 7]  # Replace with real metrics if available
+    counts = [5, 3, 7]  # Replace with real metrics later
     fig, ax = plt.subplots()
     ax.bar(actions, counts, color=["green", "red", "gray"])
     ax.set_title("Action Distribution")

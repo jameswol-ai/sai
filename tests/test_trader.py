@@ -1,16 +1,23 @@
 # tests/test_trader.py
 
 import pytest
-from bot.trader import decide_action
+from sai.bot.mock_trader import MockTrader
 
-def test_buy_signal():
-    action = decide_action(prediction=105, current_price=100)
-    assert action == "BUY"
+def test_mock_buy_order():
+    trader = MockTrader(broker="alpaca")
+    result = trader.execute("BUY", {"symbol": "AAPL", "qty": 10})
+    assert result["status"] == "success"
+    assert result["action"] == "BUY"
+    assert result["symbol"] == "AAPL"
 
-def test_sell_signal():
-    action = decide_action(prediction=95, current_price=100)
-    assert action == "SELL"
+def test_mock_sell_order():
+    trader = MockTrader(broker="binance")
+    result = trader.execute("SELL", {"symbol": "BTCUSDT", "qty": 0.01})
+    assert result["status"] == "success"
+    assert result["action"] == "SELL"
+    assert result["symbol"] == "BTCUSDT"
 
-def test_hold_signal():
-    action = decide_action(prediction=100, current_price=100)
-    assert action == "HOLD"
+def test_mock_invalid_action():
+    trader = MockTrader()
+    result = trader.execute("HOLD", {"symbol": "TSLA"})
+    assert result["status"] == "ignored"

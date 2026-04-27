@@ -1,0 +1,30 @@
+broker: alpaca   # options: alpaca, binance
+
+symbols:
+  - AAPL
+  - TSLA
+  - BTCUSDT
+
+position_sizing:
+  default_qty: 1
+  risk_per_trade: 0.02   # 2% of account equity
+
+logging:
+  file: trading.log
+  level: INFO
+
+mode: live   # options: live, test
+broker: alpaca   # options: alpaca, binance
+
+symbols:
+  - AAPL
+  - TSLA
+  - BTCUSDT
+
+position_sizing:
+  default_qty: 1
+  risk_per_trade: 0.02
+
+logging:
+  file: trading.log
+  level: INFO

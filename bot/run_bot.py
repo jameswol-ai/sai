@@ -5,13 +5,13 @@ import yaml
 import argparse
 from sai.bot.main import get_data, decide_action, SimpleModel
 from sai.bot.trader import Trader
+from sai.bot.mock_trader import MockTrader
 
 def load_config(path="sai/configs/config.yaml"):
     with open(path, "r") as f:
         return yaml.safe_load(f)
 
 def run_bot(dry_run=False):
-    # Load config
     config = load_config()
 
     # Configure logging
@@ -23,30 +23,26 @@ def run_bot(dry_run=False):
 
     logging.info("Starting trading bot...")
     model = SimpleModel()
-    trader = Trader(broker=config["broker"]) if not dry_run else None
+
+    # Dependency injection: choose trader class
+    if dry_run or config.get("mode") == "test":
+        trader = MockTrader(broker=config["broker"])
+    else:
+        trader = Trader(broker=config["broker"])
 
     try:
         while True:
             for symbol in config["symbols"]:
-                # Fetch market data
                 data = get_data(symbol=symbol)
-
-                # Decide action
                 action = decide_action(model, data)
 
-                # Log and simulate/execute
                 logging.info(f"Symbol: {symbol} | Data: {data} | Action: {action}")
                 print(f"{symbol} decision: {action}")
 
                 if action in ["BUY", "SELL"]:
                     data["symbol"] = symbol
                     data["qty"] = config["position_sizing"]["default_qty"]
-
-                    if dry_run:
-                        result = {"status": "dry-run", "action": action, "symbol": symbol, "qty": data["qty"]}
-                    else:
-                        result = trader.execute(action, data)
-
+                    result = trader.execute(action, data)
                     logging.info(f"Result: {result}")
                     print(f"Result: {result}")
 

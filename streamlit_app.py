@@ -1,69 +1,115 @@
 import streamlit as st
-import pandas as pd
-import matplotlib.pyplot as plt
+import sys
+import os
+import traceback
 
-# Proper absolute imports from sai package
-from sai.bot.main import run_bot(), get_data, decide_action, SimpleModel
-from sai.utils import setup_logger
+# --------------------------------------------------
+# 🧭 FIX PATH (CRITICAL)
+# --------------------------------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SRC_PATH = os.path.join(BASE_DIR, "src")
 
-logger = setup_logger("sai_streamlit")
+if SRC_PATH not in sys.path:
+    sys.path.insert(0, SRC_PATH)
 
-def main():
-    st.set_page_config(page_title="SAI Trading Bot Dashboard", layout="wide")
-    st.title("📈 SAI Trading Bot Dashboard")
+# --------------------------------------------------
+# 🎛 UI
+# --------------------------------------------------
+st.set_page_config(page_title="AI Architecture Bot", layout="wide")
 
-    # Sidebar controls
-    st.sidebar.header("Controls")
-    if st.sidebar.button("Run Bot"):
-        action = run_bot()
-        st.success(f"Bot Action: {action}")
-        logger.info(f"Bot executed action: {action}")
+st.title("🏗️ AI Architecture Bot")
 
-    if st.sidebar.button("Refresh Data"):
-        data = get_data()
-        st.write("Latest Market Data Snapshot:", data)
-        logger.info("Market data refreshed")
+# --------------------------------------------------
+# 🧠 IMPORT (STANDARDIZED)
+# --------------------------------------------------
+try:
+    from core.engine import WorkflowEngine
+except Exception:
+    st.error("❌ Failed to import WorkflowEngine")
+    st.code(traceback.format_exc())
+    st.stop()
 
-    if st.sidebar.button("Decide Action"):
-        data = get_data()
-        action = decide_action(data)
-        st.info(f"Bot Decision: {action}")
-        logger.info(f"Bot decision: {action}")
+# --------------------------------------------------
+# 🧩 FUNCTIONS
+# --------------------------------------------------
+def concept_stage(ctx):
+    return f"Concept: {ctx.get('input')}"
 
-    if st.sidebar.button("Test Model"):
-        model = SimpleModel()
-        sample_data = get_data()
-        prediction = model.predict(sample_data)
-        st.write("Model Prediction:", prediction)
-        logger.info(f"Model prediction: {prediction}")
+def climate_stage(ctx):
+    if "tropical" in ctx.get("input", "").lower():
+        return "🌴 Tropical design applied"
+    return "Standard climate design"
 
-    # Dashboard sections
-    st.header("Market Data")
-    data = get_data()
-    if isinstance(data, pd.DataFrame):
-        st.dataframe(data)
-        st.line_chart(data)
+def eco_stage(ctx):
+    if "eco" in ctx.get("input", "").lower():
+        return "♻️ Eco features added"
+    return "No eco features"
+
+def final_output(ctx):
+    return f"""
+FINAL DESIGN
+
+Concept:
+{ctx.get('concept')}
+
+Climate:
+{ctx.get('climate')}
+
+Eco:
+{ctx.get('eco')}
+"""
+
+function_registry = {
+    "concept_stage": concept_stage,
+    "climate_stage": climate_stage,
+    "eco_stage": eco_stage,
+    "final_output": final_output,
+}
+
+# --------------------------------------------------
+# 🗺 WORKFLOW
+# --------------------------------------------------
+workflow = {
+    "design_flow": [
+        {"name": "concept_stage", "output_key": "concept"},
+        {"name": "climate_stage", "output_key": "climate"},
+        {"name": "eco_stage", "output_key": "eco"},
+        {"name": "final_output", "output_key": "result"},
+    ]
+}
+
+# --------------------------------------------------
+# ⚙️ ENGINE
+# --------------------------------------------------
+engine = WorkflowEngine(workflow, function_registry)
+
+# --------------------------------------------------
+# 🎯 INPUT
+# --------------------------------------------------
+user_input = st.text_area(
+    "Describe your architectural project:",
+    placeholder="Eco-friendly school in tropical climate"
+)
+
+# --------------------------------------------------
+# ▶️ RUN
+# --------------------------------------------------
+if st.button("Generate Design"):
+    if not user_input.strip():
+        st.warning("Please enter a project description")
     else:
-        st.write(data)
+        try:
+            engine.set_context("input", user_input)
+            result = engine.run_workflow("design_flow")
 
-    st.header("Trading Decisions")
-    col1, col2 = st.columns(2)
+            st.success("✅ Design Generated")
 
-    with col1:
-        st.subheader("Predictions")
-        model = SimpleModel()
-        sample_data = get_data()
-        prediction = model.predict(sample_data)
-        st.write(prediction)
+            st.subheader("Output")
+            st.code(result.get("result", "No result"))
 
-    with col2:
-        st.subheader("Action Distribution")
-        actions = [decide_action(get_data()) for _ in range(10)]
-        action_counts = pd.Series(actions).value_counts()
-        st.bar_chart(action_counts)
+            with st.expander("Full Context"):
+                st.json(result)
 
-    st.header("Logs")
-    st.text("Check your logs in the console or log file for detailed traces.")
-
-if __name__ == "__main__":
-    main()# sai/streamlit_app.py 
+        except Exception:
+            st.error("❌ Runtime error")
+            st.code(traceback.format_exc())

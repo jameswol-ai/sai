@@ -1,0 +1,38 @@
+groups:
+  - name: trading_alerts
+    rules:
+      - alert: HighLoss
+        expr: sai_pnl_total < -1000
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Trading bot sustained losses > $1000"
+          description: "Check strategy and risk controls immediately."
+
+      - alert: NoTrades
+        expr: rate(sai_trades_total[10m]) == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No trades executed in last 15 minutes"
+          description: "Verify data feeds and execution pipeline."
+
+      - alert: HighLatency
+        expr: sai_trade_latency_seconds > 2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Trade execution latency > 2s"
+          description: "Investigate broker API or network issues."
+
+      - alert: ModelDrift
+        expr: sai_model_accuracy < 0.55
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Model accuracy dropped below 55%"
+          description: "Consider retraining or rolling back model."

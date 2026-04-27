@@ -63,3 +63,9 @@ class Trader:
         except Exception as e:
             logging.error(f"Trade execution failed: {e}", exc_info=True)
             return {"status": "error", "error": str(e)}
+
+def evaluate_trade(entry_price, exit_price, direction):
+    if direction == "buy":
+        return exit_price - entry_price
+    else:
+        return entry_price - exit_price

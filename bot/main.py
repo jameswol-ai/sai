@@ -1,59 +1,90 @@
 # sai/bot/main.py
 
+import argparse
+import logging
+import sys
+import pandas as pd
+
 from .workflow_engine import WorkflowEngine
 
-def run_bot():
-    # Placeholder bot execution
-    return "Bot run complete."
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger(__name__)
+
+
+# --- Core Bot Functions ---
 
 def get_data():
-    # Placeholder market data
-    return {"price": 100, "volume": 500}
+    """
+    Placeholder for market data ingestion.
+    Replace with real API calls or CSV/DB loaders.
+    """
+    logger.info("Fetching market data...")
+    # Example dummy data
+    return pd.DataFrame({
+        "price": [100, 102, 105],
+        "volume": [500, 600, 550]
+    })
 
-def decide_action(prediction):
+
+def decide_action(prediction: float) -> str:
+    """
+    Decide trading action based on prediction score.
+    """
     return "BUY" if prediction > 0.5 else "SELL"
 
-class SimpleModel:
-    def predict(self, data):
-        # Dummy prediction logic
-        return [0.7, 0.3, 0.9]
-
-from sai.utils import setup_logger
-
-# Configure logger for bot operations
-logger = setup_logger("sai_bot")
 
 class SimpleModel:
     """
-    A simple placeholder model for trading decisions.
-    Replace with your ML model integration later.
+    Dummy ML model for predictions.
+    Replace with scikit-learn, TensorFlow, or PyTorch model.
     """
-    def predict(self, data):
-        # Example prediction logic
-        return "BUY" if sum(data) % 2 == 0 else "SELL"
+    def predict(self, data: pd.DataFrame):
+        logger.info("Generating predictions...")
+        # Example: return probabilities based on price trend
+        return [0.7 if p > 100 else 0.3 for p in data["price"]]
 
-def get_data():
-    """
-    Simulate market data ingestion.
-    Replace with real API or data feed.
-    """
-    return [100, 102, 101, 103, 104]
-
-def decide_action(data):
-    """
-    Decide trading action based on model prediction.
-    """
-    model = SimpleModel()
-    return model.predict(data)
 
 def run_bot():
     """
-    Run the trading bot end-to-end:
-    - Fetch data
-    - Decide action
-    - Log and return decision
+    Run the trading bot end-to-end.
     """
+    logger.info("Starting trading bot...")
     data = get_data()
-    action = decide_action(data)
-    logger.info(f"Bot decided to: {action}")
-    return action
+    model = SimpleModel()
+    predictions = model.predict(data)
+    actions = [decide_action(p) for p in predictions]
+
+    results = pd.DataFrame({
+        "Price": data["price"],
+        "Prediction": predictions,
+        "Action": actions
+    })
+
+    logger.info("Trading decisions complete.")
+    return results
+
+
+# --- CLI Entry Point ---
+
+def main():
+    parser = argparse.ArgumentParser(description="SAI Trading Bot CLI")
+    parser.add_argument("--run", action="store_true", help="Run the trading bot")
+    parser.add_argument("--status", action="store_true", help="Check WorkflowEngine status")
+    args = parser.parse_args()
+
+    if args.status:
+        engine = WorkflowEngine()
+        print(engine.status())
+
+    if args.run:
+        results = run_bot()
+        print(results)
+
+
+if __name__ == "__main__":
+    main()

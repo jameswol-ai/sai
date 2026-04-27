@@ -1,7 +1,11 @@
-import os
-
-def list_models(registry_dir="models/registry_store"):
-    return sorted(os.listdir(registry_dir))
-
-if __name__ == "__main__":
-    print(list_models())
+def list_models():
+    """
+    Minimal stub for listing models.
+    Replace with MLflow or DB query logic.
+    """
+    models = [
+        {"id": "model_v1", "path": "models/model_v1.pkl"},
+        {"id": "model_v2", "path": "models/model_v2.pkl"}
+    ]
+    print("[Registry] Listing models")
+    return models

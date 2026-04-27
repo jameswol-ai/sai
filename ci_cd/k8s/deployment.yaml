@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sai-trading-bot
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sai-trading-bot
+  template:
+    metadata:
+      labels:
+        app: sai-trading-bot
+    spec:
+      containers:
+        - name: sai-trading-bot
+          image: myrepo/sai-trading-bot:latest
+          ports:
+            - containerPort: 8501
+          livenessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 30
+            periodSeconds: 15

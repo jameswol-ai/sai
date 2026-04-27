@@ -1,54 +1,37 @@
 # sai/streamlit_app.py
-
 import streamlit as st
+import sys
+import os
 import traceback
+
+# --------------------------------------------------
+# 🧭 PATH FIX (handles Streamlit Cloud + local)
+# --------------------------------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+POSSIBLE_PATHS = [
+    BASE_DIR,
+    os.path.join(BASE_DIR, "src"),
+    os.path.join(BASE_DIR, "src", "core"),
+]
+
+for path in POSSIBLE_PATHS:
+    if path not in sys.path:
+        sys.path.insert(0, path)
 
 # --------------------------------------------------
 # 🎛 PAGE CONFIG
 # --------------------------------------------------
-st.set_page_config(page_title="SAI Trading Bot Dashboard", layout="wide")
+st.set_page_config(page_title="AI Trading Bot", layout="wide")
 
-st.title("🏗️ SAI Trading Bot Dashboard")
+st.title("AI Trading Bot")
 st.caption("Resilient Workflow Engine • Debug Mode Enabled")
-
-# --------------------------------------------------
-# 🔌 IMPORTS FROM SAI PACKAGE
-# --------------------------------------------------
-from sai.bot.main import run_bot, get_data, decide_action, SimpleModel
 
 # --------------------------------------------------
 # 🔍 DEBUG PANEL
 # --------------------------------------------------
 with st.expander("⚙️ System Debug Info", expanded=False):
-    st.write("Streamlit app is running inside the `sai` package.")
-    try:
-        st.write("Test run_bot():", run_bot())
-    except Exception as e:
-        st.error("Import or execution error:")
-        st.code(traceback.format_exc())
+    st.write("📁 Base Dir:", BASE_DIR)
 
-# --------------------------------------------------
-# 📊 MAIN DASHBOARD
-# --------------------------------------------------
-def main():
-    if st.sidebar.button("Run Bot"):
-        action = run_bot()
-        st.write("Bot Action:", action)
-
-    if st.sidebar.button("Refresh Data"):
-        data = get_data()
-        st.write("Latest Data:", data)
-
-    if st.sidebar.button("Decide Action"):
-        data = get_data()
-        action = decide_action(data)
-        st.write("Bot Decision:", action)
-
-    if st.sidebar.button("Test Model"):
-        model = SimpleModel()
-        sample_data = get_data()
-        prediction = model.predict(sample_data)
-        st.write("Model Prediction:", prediction)
-
-if __name__ == "__main__":
-    main()
+    for path in POSSIBLE_PATHS:
+        exists = os.path.exists(path)

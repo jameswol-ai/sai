@@ -17,31 +17,29 @@ def clean_registry(tmp_path, monkeypatch):
         test_registry.unlink()
 
 def test_register_and_delete_model():
-    # Register a dummy model
     entry = register_model("dummy_model.pkl")
     models = list_models()
     assert any(m["id"] == entry["id"] for m in models)
 
-    # Delete the model
     result = delete_model(entry["id"])
     assert result["status"] == "deleted"
 
-    # Verify deletion
     models_after = list_models()
     assert all(m["id"] != entry["id"] for m in models_after)
 
 def test_set_active_and_delete_model():
-    # Register two models
     m1 = register_model("model1.pkl")
     m2 = register_model("model2.pkl")
 
-    # Set one active
     rollback_model(m1["id"])
     models = list_models()
     active = next((m for m in models if m.get("active")), None)
     assert active and active["id"] == m1["id"]
 
-    # Delete active model
     delete_model(m1["id"])
     models_after = list_models()
     assert all(m["id"] != m1["id"] for m in models_after)
+
+    # ✅ Verify no model remains active after deleting the active one
+    active_after = next((m for m in models_after if m.get("active")), None)
+    assert active_after is None

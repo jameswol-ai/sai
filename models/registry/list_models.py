@@ -1,11 +1,14 @@
+import json, os
+
+REGISTRY_FILE = os.path.join(os.path.dirname(__file__), "models_registry.json")
+
 def list_models():
-    """
-    Minimal stub for listing models.
-    Replace with MLflow or DB query logic.
-    """
-    models = [
-        {"id": "model_v1", "path": "models/model_v1.pkl"},
-        {"id": "model_v2", "path": "models/model_v2.pkl"}
-    ]
+    """List all registered models from the JSON registry file."""
+    if os.path.exists(REGISTRY_FILE):
+        with open(REGISTRY_FILE, "r") as f:
+            registry = json.load(f)
+    else:
+        registry = []
+
     print("[Registry] Listing models")
-    return models
+    return registry

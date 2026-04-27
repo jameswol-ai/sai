@@ -1,1 +1,5 @@
-# Marks 'sai' as a package
+# sai/__init__.py
+"""
+SAI package initializer.
+Ensures Python treats 'sai' as a package.
+"""

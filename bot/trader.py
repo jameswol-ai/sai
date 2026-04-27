@@ -1,37 +1,11 @@
-def decide_action(prediction, current_price):
-    if prediction > current_price:
-        return "BUY"
-    elif prediction < current_price:
-        return "SELL"
-    return "HOLD"
+# sai/bot/trader.py
 
-def execute_trade(client, action, price, quantity=0.001):
-    """Execute a trade on the exchange."""
-    if action == "BUY":
-        # Place buy order
-        order = client.create_order(
-            symbol="BTCUSDT",
-            side="BUY",
-            type="MARKET",
-            quantity=quantity
-        )
-        print(f"Placed BUY order: {order}")
-    elif action == "SELL":
-        # Place sell order
-        order = client.create_order(
-            symbol="BTCUSDT",
-            side="SELL",
-            type="MARKET",
-            quantity=quantity
-        )
-        print(f"Placed SELL order: {order}")
-    else:
-        print("No trade executed (HOLD)")
+class Trader:
+    def __init__(self):
+        # Initialize API keys, session, etc.
+        pass
 
-def get_balance(client):
-    """Get account balance."""
-    return client.get_account()
-
-def get_positions(client):
-    """Get current positions."""
-    return client.get_account()["balances"]
+    def execute(self, action, data):
+        # Replace with broker/exchange API call
+        # Example: place_order(symbol=data["symbol"], side=action, qty=1)
+        return {"status": "success", "action": action, "symbol": data.get("symbol")}

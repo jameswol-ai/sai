@@ -1,0 +1,32 @@
+{
+  "dashboard": {
+    "title": "SAI Trading Bot Metrics",
+    "panels": [
+      {
+        "type": "graph",
+        "title": "Profit & Loss",
+        "targets": [{ "expr": "sai_pnl_total" }]
+      },
+      {
+        "type": "graph",
+        "title": "Trade Frequency",
+        "targets": [{ "expr": "sai_trades_per_minute" }]
+      },
+      {
+        "type": "graph",
+        "title": "Latency per Trade",
+        "targets": [{ "expr": "sai_trade_latency_seconds" }]
+      },
+      {
+        "type": "stat",
+        "title": "Open Positions",
+        "targets": [{ "expr": "sai_open_positions" }]
+      },
+      {
+        "type": "stat",
+        "title": "Model Version",
+        "targets": [{ "expr": "sai_model_version" }]
+      }
+    ]
+  }
+}

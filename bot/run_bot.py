@@ -2,6 +2,7 @@
 
 import logging
 from sai.bot.main import get_data, decide_action, SimpleModel
+from sai.bot.trader import Trader   # <-- your execution module
 
 # Configure logging
 logging.basicConfig(
@@ -11,9 +12,10 @@ logging.basicConfig(
 )
 
 def run_bot():
-    """Main trading loop for SAI bot."""
+    """Main trading loop for SAI bot with execution."""
     logging.info("Starting trading bot...")
     model = SimpleModel()
+    trader = Trader()   # initialize broker/exchange connection
 
     try:
         while True:
@@ -27,8 +29,10 @@ def run_bot():
             logging.info(f"Data: {data} | Action: {action}")
             print(f"Trade decision: {action}")
 
-            # TODO: integrate trader execution here
-            # e.g., trader.execute(action)
+            if action in ["BUY", "SELL"]:
+                result = trader.execute(action, data)
+                logging.info(f"Execution result: {result}")
+                print(f"Executed: {result}")
 
     except KeyboardInterrupt:
         logging.info("Bot stopped manually.")

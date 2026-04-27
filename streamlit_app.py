@@ -1,115 +1,112 @@
+# sai/streamlit_app.py
 import streamlit as st
-import pandas as pd
-import time
 import threading
+import time
 import logging
-from prometheus_client import Gauge, Counter, start_http_server
+import matplotlib.pyplot as plt
 
-# --- Logging Setup ---
-LOG_FILE = "logs/trading.log"
+from sai.bot.main import run_bot, get_data, load_model, test_model
+
+# Configure logging
 logging.basicConfig(
-    filename=LOG_FILE,
+    filename="sai_app.log",
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
-logger = logging.getLogger("sai_trading_bot")
 
-# Example log generator (replace with real trading loop logs)
-def generate_logs():
-    while True:
-        logger.info("Executed trade at simulated price 100.25")
-        logger.warning("Latency spike detected: 2.3s")
-        time.sleep(20)
+# Initialize session state
+if "bot_thread" not in st.session_state:
+    st.session_state.bot_thread = None
+if "bot_running" not in st.session_state:
+    st.session_state.bot_running = False
+if "logs" not in st.session_state:
+    st.session_state.logs = []
 
-threading.Thread(target=generate_logs, daemon=True).start()
+# Helper: threaded bot runner
+def start_bot():
+    def bot_loop():
+        logging.info("Bot started.")
+        while st.session_state.bot_running:
+            try:
+                trade_info = run_bot()
+                st.session_state.logs.append(trade_info)
+                time.sleep(2)
+            except Exception as e:
+                logging.error(f"Bot error: {e}")
+                st.session_state.logs.append(f"Error: {e}")
+                break
+        logging.info("Bot stopped.")
 
-# --- Prometheus Metrics ---
-pnl_total = Gauge("sai_pnl_total", "Total Profit and Loss")
-trades_per_minute = Gauge("sai_trades_per_minute", "Trades executed per minute")
-trade_latency = Gauge("sai_trade_latency_seconds", "Latency per trade in seconds")
-open_positions = Gauge("sai_open_positions", "Number of open positions")
-model_version = Gauge("sai_model_version", "Current ML model version")
-trade_counter = Counter("sai_trade_count", "Total trades executed")
+    st.session_state.bot_running = True
+    st.session_state.bot_thread = threading.Thread(target=bot_loop, daemon=True)
+    st.session_state.bot_thread.start()
 
-pnl_history, trade_freq_history, timestamps = [], [], []
+def stop_bot():
+    st.session_state.bot_running = False
+    logging.info("Bot stop requested.")
 
-def start_metrics_server():
-    start_http_server(8000)
-    while True:
-        pnl_value = 1250.75
-        trades_value = 5
-        latency_value = 0.85
-        positions_value = 3
-        model_value = 20260427
+# --- Streamlit UI ---
+st.set_page_config(page_title="SAI Trading Bot", layout="wide")
+st.title("📈 SAI Trading Bot Dashboard")
 
-        pnl_total.set(pnl_value)
-        trades_per_minute.set(trades_value)
-        trade_latency.set(latency_value)
-        open_positions.set(positions_value)
-        model_version.set(model_value)
-        trade_counter.inc()
+tabs = st.tabs(["Dashboard", "Strategy Config", "Logs", "Model Testing", "Debug"])
 
-        timestamps.append(time.strftime("%H:%M:%S"))
-        pnl_history.append(pnl_value)
-        trade_freq_history.append(trades_value)
+# Dashboard Tab
+with tabs[0]:
+    st.header("Live Trading Dashboard")
+    col1, col2 = st.columns([1, 1])
 
-        time.sleep(15)
+    with col1:
+        if st.button("Start Bot", disabled=st.session_state.bot_running):
+            start_bot()
+        if st.button("Stop Bot", disabled=not st.session_state.bot_running):
+            stop_bot()
 
-threading.Thread(target=start_metrics_server, daemon=True).start()
+    with col2:
+        st.write("Market Snapshot")
+        try:
+            data = get_data()
+            st.json(data)
+        except Exception as e:
+            st.error(f"Data fetch error: {e}")
 
-# --- Tabs Layout ---
-tab1, tab2, tab3, tab4 = st.tabs(["📊 Dashboard", "⚠️ Risk Monitor", "📝 Logs", "⚙️ Config"])
+    st.write("Trade Logs (latest 10)")
+    st.table(st.session_state.logs[-10:])
 
-with tab1:
-    st.title("Trading Dashboard")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("PnL ($)", f"{pnl_total._value.get():.2f}")
-    col2.metric("Trades/min", f"{trades_per_minute._value.get():.0f}")
-    col3.metric("Latency (s)", f"{trade_latency._value.get():.2f}")
-    st.metric("Open Positions", f"{open_positions._value.get():.0f}")
-    st.metric("Model Version", f"{model_version._value.get():.0f}")
-    st.metric("Total Trades", f"{trade_counter._value.get():.0f}")
+# Strategy Config Tab
+with tabs[1]:
+    st.header("Strategy Configuration")
+    risk_level = st.slider("Risk Level", 1, 10, 5)
+    st.write(f"Selected Risk Level: {risk_level}")
+    # Extend with more strategy parameters as needed
 
-    if len(timestamps) > 1:
-        df = pd.DataFrame({
-            "Timestamp": timestamps,
-            "PnL": pnl_history,
-            "Trades/min": trade_freq_history
-        })
-        st.line_chart(df.set_index("Timestamp")[["PnL"]])
-        st.line_chart(df.set_index("Timestamp")[["Trades/min"]])
-
-with tab2:
-    st.title("Risk Monitor")
-    risk_status = "Healthy"
-    risk_color = "✅ GREEN"
-    if pnl_total._value.get() < -1000 or trade_latency._value.get() > 2.0 or open_positions._value.get() > 10:
-        risk_status = "Critical"
-        risk_color = "🚨 RED"
-    elif pnl_total._value.get() < 0 or trade_latency._value.get() > 1.0 or open_positions._value.get() > 5:
-        risk_status = "Warning"
-        risk_color = "⚠️ YELLOW"
-    st.subheader("Overall Risk Status")
-    st.write(f"{risk_color} — {risk_status}")
-
-    if pnl_total._value.get() < -1000:
-        st.error("🚨 CRITICAL: Losses exceed $1000! Immediate action required.")
-    elif pnl_total._value.get() < 0:
-        st.warning("⚠️ Bot is currently running at a loss.")
-    if trade_latency._value.get() > 2.0:
-        st.warning("⚠️ High latency detected (>2s per trade).")
-    if open_positions._value.get() > 10:
-        st.warning("⚠️ Too many open positions. Risk exposure is high.")
-
-with tab3:
-    st.title("Logs")
+# Logs Tab
+with tabs[2]:
+    st.header("Application Logs")
     try:
-        with open(LOG_FILE, "r") as f:
-            logs = f.readlines()[-20:]  # Show last 20 log entries
-        st.text_area("Recent Logs", "".join(logs), height=300)
+        with open("sai_app.log", "r") as f:
+            log_lines = f.readlines()[-50:]
+        st.text("".join(log_lines))
     except FileNotFoundError:
-        st.info("No logs available yet.")
+        st.info("No logs yet.")
 
-with tab4:
-    st.title("Config")
-    st.write("⚙️ Strategy and risk configuration options go here.")
+# Model Testing Tab
+with tabs[3]:
+    st.header("Model Testing")
+    uploaded_model = st.file_uploader("Upload model.pkl", type=["pkl"])
+    if uploaded_model:
+        model = load_model(uploaded_model)
+        st.success("Model loaded successfully.")
+        test_results = test_model(model)
+        st.write("Test Results:", test_results)
+
+        # Example visualization
+        fig, ax = plt.subplots()
+        ax.plot(test_results.get("predictions", []), label="Predictions")
+        ax.legend()
+        st.pyplot(fig)
+
+# Debug Tab
+with tabs[4]:
+    st.header("Debug Information")
+    st.write("Session State:", st.session_state)

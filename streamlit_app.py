@@ -18,14 +18,6 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
-# --- Prometheus metrics ---
-trade_counter = Counter("sai_trades_total", "Total trades executed")
-last_price_gauge = Gauge("sai_last_price", "Last trade price")
-trade_latency_hist = Histogram("sai_trade_latency_seconds", "Latency per trade loop")
-
-# Start Prometheus metrics server on port 8000
-start_http_server(8000)
-
 # --- Session state init ---
 if "trades" not in st.session_state:
     st.session_state.trades = []

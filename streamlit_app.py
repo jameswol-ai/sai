@@ -44,18 +44,19 @@ import os
 import json
 import pickle
 
-REGISTRY_FILE = "sai/models/registry/registry.json"
 
-def load_registry():
-if os.path.exists(REGISTRY_FILE):
-with open(REGISTRY_FILE, "r") as f:
-return json.load(f)
-return []
+REGISTRY_FILE = "sai/models/registry.json"
 
-def save_registry(registry):
-with open(REGISTRY_FILE, "w") as f:
-json.dump(registry, f, indent=2)
-
+def ensure_registry_file():
+    """Make sure the model registry file exists."""
+    if os.path.exists(REGISTRY_FILE):
+        # File already exists, nothing to do
+        return
+    else:
+        # Create an empty registry file
+        with open(REGISTRY_FILE, "w") as f:
+            f.write("{}")
+            
 def registry_tab():
 st.title("📚 Model Registry")
 

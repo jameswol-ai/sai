@@ -6,8 +6,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from sai.models.registry.register_model import register_model
-import streamlit as st
-from sai.models.registry.register_model import register_model
 import os
 import json
 import pickle

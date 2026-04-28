@@ -74,8 +74,10 @@ st.success(f"Model registered: {uploaded_file.name}")
 # Display registry
 registry = load_registry()
 if registry:
-st.subheader("Registered Models")
-st.table(registry)
+    st.subheader("Registered Models")
+    st.table(registry)
+else:
+    st.warning("No models registered yet.")
 
 # Select and load model
 model_names = [os.path.basename(entry["model_path"]) for entry in registry]

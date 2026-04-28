@@ -6,6 +6,45 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from sai.models.registry.register_model import register_model
+import os
+import json
+
+REGISTRY_FILE = "sai/models/registry/registry.json"
+
+def load_registry():
+    if os.path.exists(REGISTRY_FILE):
+        with open(REGISTRY_FILE, "r") as f:
+            return json.load(f)
+    return []
+
+def save_registry(registry):
+    with open(REGISTRY_FILE, "w") as f:
+        json.dump(registry, f, indent=2)
+
+def registry_tab():
+    st.title("📚 Model Registry")
+
+    # Upload model file
+    uploaded_file = st.file_uploader("Upload a model file (.pkl)", type=["pkl"])
+    if uploaded_file is not None:
+        model_path = f"sai/models/registry/{uploaded_file.name}"
+        with open(model_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        result = register_model(model_path)
+
+        # Update registry
+        registry = load_registry()
+        registry.append(result)
+        save_registry(registry)
+        st.success(f"Model registered: {uploaded_file.name}")
+
+    # Display registry
+    registry = load_registry()
+    if registry:
+        st.subheader("Registered Models")
+        st.table(registry)
+    else:
+        st.info("No models registered yet.")
 from sai.models.registry.list_models import list_models
 from sai.models.registry.rollback_model import rollback_model
 

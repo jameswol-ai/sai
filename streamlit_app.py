@@ -294,9 +294,6 @@ def rollback_model_with_timestamp(model_id: str):
         json.dump(registry, f, indent=2)
 
 with tabs[4]:
-import pandas as pd
-
-with tabs[4]:
     st.header("Model Registry")
 
     # --- Registry Stats ---

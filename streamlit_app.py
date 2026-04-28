@@ -8,12 +8,23 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
+# Prometheus client
+from prometheus_client, start_http_server
+
 # --- Logging setup ---
 logging.basicConfig(
     filename="sai_app.log",
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
+
+# --- Prometheus metrics ---
+trade_counter = Counter("sai_trades_total", "Total trades executed")
+last_price_gauge = Gauge("sai_last_price", "Last trade price")
+trade_latency_hist = Histogram("sai_trade_latency_seconds", "Latency per trade loop")
+
+# Start Prometheus metrics server on port 8000
+start_http_server(8000)
 
 # --- Session state init ---
 if "trades" not in st.session_state:
@@ -24,9 +35,16 @@ if "running" not in st.session_state:
 # --- Dummy trading loop ---
 def trading_loop():
     while st.session_state.running:
+        start = time.time()
         price = np.random.randn() * 10 + 100
         trade = {"time": time.strftime("%H:%M:%S"), "price": price}
         st.session_state.trades.append(trade)
+
+        # Update metrics
+        trade_counter.inc()
+        last_price_gauge.set(price)
+        trade_latency_hist.observe(time.time() - start)
+
         logging.info(f"Trade executed: {trade}")
         time.sleep(2)
 

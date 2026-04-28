@@ -6,8 +6,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from sai.models.registry.register_model import register_model
+import streamlit as st
+from sai.models.registry.register_model import register_model
 import os
 import json
+import pickle
 
 REGISTRY_FILE = "sai/models/registry/registry.json"
 
@@ -43,6 +46,17 @@ def registry_tab():
     if registry:
         st.subheader("Registered Models")
         st.table(registry)
+
+        # Select and load model
+        model_names = [os.path.basename(entry["model_path"]) for entry in registry]
+        selected_model = st.selectbox("Select a model to load", model_names)
+        if st.button("Load Selected Model"):
+            model_entry = next((m for m in registry if os.path.basename(m["model_path"]) == selected_model), None)
+            if model_entry:
+                with open(model_entry["model_path"], "rb") as f:
+                    loaded_model = pickle.load(f)
+                st.session_state["active_model"] = loaded_model
+                st.success(f"Loaded model: {selected_model}")
     else:
         st.info("No models registered yet.")
 from sai.models.registry.list_models import list_models

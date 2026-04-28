@@ -56,9 +56,6 @@ def ensure_registry_file():
         # Create an empty registry file
         with open(REGISTRY_FILE, "w") as f:
             f.write("{}")
-            
-def registry_tab():
-st.title("📚 Model Registry")
 
 # Upload model file
 uploaded_file = st.file_uploader("Upload a model file (.pkl)", type=["pkl"])

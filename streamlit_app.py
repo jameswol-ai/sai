@@ -58,12 +58,12 @@ def ensure_registry_file():
             f.write("{}")
 
 # Upload model file
-uploaded_file = st.file_uploader("Upload a model file (.pkl)", type=["pkl"])
 if uploaded_file is not None:
-model_path = f"sai/models/registry/{uploaded_file.name}"
-with open(model_path, "wb") as f:
-f.write(uploaded_file.getbuffer())
-result = register_model(model_path)
+    model_path = f"sai/models/registry/{uploaded_file.name}"
+    # You can add more logic here, for example:
+    with open(model_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    st.success(f"Model {uploaded_file.name} saved to registry.")
 
 # Update registry
 registry = load_registry()

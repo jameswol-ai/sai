@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sai-bot
+  labels:
+    app: sai-bot
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sai-bot
+  template:
+    metadata:
+      labels:
+        app: sai-bot
+    spec:
+      containers:
+        - name: sai-bot
+          image: ghcr.io/<your-org>/sai-bot:latest
+          ports:
+            - containerPort: 8501   # Streamlit default
+          envFrom:
+            - secretRef:
+                name: sai-bot-secrets
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8501
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8501
+            initialDelaySeconds: 30
+            periodSeconds: 10

@@ -694,3 +694,79 @@ if os.path.exists(AUDIT_FILE):
 else:
     st.info("No audit log entries yet.")
 
+import streamlit as st
+import threading
+import time
+import pandas as pd
+
+def dashboard_tab():
+    st.title("📊 Live Trading Dashboard")
+
+    # Active model status
+    if "active_model" in st.session_state:
+        st.success(f"Active model loaded: {st.session_state['active_model'].__class__.__name__}")
+    else:
+        st.warning("No active model loaded. Please select one in the Registry tab.")
+
+    # Start/stop trading loop
+    if st.button("Start Trading"):
+        if "active_model" not in st.session_state:
+            st.error("Load a model first in the Registry tab.")
+        else:
+            if "trading_thread" not in st.session_state or not st.session_state["trading_thread"].is_alive():
+                st.session_state["stop_trading"] = False
+                st.session_state["trade_log"] = []
+                st.session_state["pnl"] = 0.0
+                st.session_state["wins"] = 0
+                st.session_state["losses"] = 0
+                st.session_state["peak_equity"] = 0.0
+                st.session_state["trading_thread"] = threading.Thread(target=trading_loop, daemon=True)
+                st.session_state["trading_thread"].start()
+                st.success("Trading loop started.")
+
+    if st.button("Stop Trading"):
+        st.session_state["stop_trading"] = True
+        st.info("Trading loop stopped.")
+
+    # Display live chart
+    if "trade_log" in st.session_state and st.session_state["trade_log"]:
+        df = pd.DataFrame(st.session_state["trade_log"])
+        st.line_chart(df[["price", "prediction"]])
+
+        # Metrics panel
+        st.subheader("📈 Performance Metrics")
+        pnl = st.session_state.get("pnl", 0.0)
+        wins = st.session_state.get("wins", 0)
+        losses = st.session_state.get("losses", 0)
+        total_trades = wins + losses
+        win_rate = (wins / total_trades * 100) if total_trades > 0 else 0
+        peak_equity = st.session_state.get("peak_equity", 0.0)
+        drawdown = peak_equity - pnl if pnl < peak_equity else 0.0
+
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("PnL", f"{pnl:.2f}")
+        col2.metric("Win Rate", f"{win_rate:.1f}%")
+        col3.metric("Drawdown", f"{drawdown:.2f}")
+        col4.metric("Trades", str(total_trades))
+
+def trading_loop():
+    while not st.session_state.get("stop_trading", False):
+        price = get_latest_price()
+        model = st.session_state["active_model"]
+        prediction = model.predict([[price]])  # adjust input shape to your model
+
+        # Simulate trade outcome (replace with real logic)
+        outcome = 1 if prediction[0] > price else -1
+        st.session_state["pnl"] += outcome
+        if outcome > 0:
+            st.session_state["wins"] += 1
+        else:
+            st.session_state["losses"] += 1
+        st.session_state["peak_equity"] = max(st.session_state["peak_equity"], st.session_state["pnl"])
+
+        st.session_state["trade_log"].append({"price": price, "prediction": prediction[0]})
+        time.sleep(2)
+
+def get_latest_price():
+    import random
+    return random.uniform(90, 110)

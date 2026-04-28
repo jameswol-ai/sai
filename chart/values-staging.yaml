@@ -1,0 +1,35 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/your-org/sai-bot
+  tag: staging
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8501
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: sai-staging.yourdomain.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: sai-staging-tls
+      hosts:
+        - sai-staging.yourdomain.com
+
+resources:
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+  requests:
+    cpu: "250m"
+    memory: "256Mi"
+
+apiKey: "staging-api-key"
+secretKey: "staging-secret-key"

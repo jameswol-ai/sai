@@ -1,6 +1,10 @@
 # sai/streamlit_app.py
 
 import streamlit as st
+import streamlit as st
+import threading, time, logging, subprocess, json
+import pandas as pd
+import matplotlib.pyplot as plt
 
 from sai.core.engine import WorkflowEngine
 from sai.stages.sample_stages import (
@@ -34,10 +38,6 @@ if st.button("Run Trading Workflow"):
     st.subheader("Workflow Results:")
     for r in results:
         st.write(f"Stage: {r['stage']} → Output: {r['output']}")
-import streamlit as st
-import threading, time, logging, subprocess, json
-import pandas as pd
-import matplotlib.pyplot as plt
 
 from sai.models.registry.register_model import register_model
 import os

@@ -8,9 +8,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
-# Prometheus client
-from prometheus_client, start_http_server
-
 # --- Logging setup ---
 logging.basicConfig(
     filename="sai_app.log",

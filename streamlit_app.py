@@ -9,24 +9,27 @@ import threading
 import logging
 import time
 
-from sai.bot.main import TradingBot   # assumes sai/bot/main.py defines TradingBot
+# Import your bot core (adjust path if needed)
+from sai.bot.main import TradingBot
 
-# Configure logging
+# --- Logging setup ---
 logging.basicConfig(
     filename="sai_app.log",
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s"
 )
 
-# Session state init
+# --- Session state init ---
 if "bot" not in st.session_state:
     st.session_state.bot = TradingBot()
 if "trades" not in st.session_state:
     st.session_state.trades = []
 if "prices" not in st.session_state:
     st.session_state.prices = []
+if "trading" not in st.session_state:
+    st.session_state.trading = False
 
-# Tabs
+# --- Tabs ---
 tabs = st.tabs(["Dashboard", "Strategy Config", "Logs", "Model Testing", "Debug"])
 
 # --- Dashboard ---
@@ -34,7 +37,7 @@ with tabs[0]:
     st.header("📈 Live Trading Dashboard")
 
     def run_trading_loop():
-        while st.session_state.get("trading", False):
+        while st.session_state.trading:
             trade, price = st.session_state.bot.execute_trade()
             st.session_state.trades.append(trade)
             st.session_state.prices.append(price)
@@ -48,14 +51,15 @@ with tabs[0]:
     if st.button("Stop Trading"):
         st.session_state.trading = False
 
-    st.line_chart(st.session_state.prices)
+    if st.session_state.prices:
+        st.line_chart(st.session_state.prices)
 
 # --- Strategy Config ---
 with tabs[1]:
     st.header("⚙️ Strategy Configuration")
-    param = st.slider("Risk Level", 0.0, 1.0, 0.5)
-    st.session_state.bot.set_param("risk", param)
-    st.write(f"Risk set to {param}")
+    risk = st.slider("Risk Level", 0.0, 1.0, 0.5)
+    st.session_state.bot.set_param("risk", risk)
+    st.write(f"Risk set to {risk}")
 
 # --- Logs ---
 with tabs[2]:

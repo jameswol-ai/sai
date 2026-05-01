@@ -1,52 +1,59 @@
+# sai/streamlit_app.py
 import streamlit as st
-from sai.bot.trader import TradingBot
-from sai.monitoring import grafana_overlay, prometheus_exporter
-import logging
+import time
 import threading
+import logging
+from sai.bot.main import TradingBot   # ✅ fixed import
 
-# --- Logging setup ---
+# Configure logging
 logging.basicConfig(
-    filename="sai.log",
+    filename="trading.log",
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-# --- Session state init ---
-if "trading_thread" not in st.session_state:
-    st.session_state.trading_thread = None
+# Initialize bot in session state
 if "bot" not in st.session_state:
-    st.session_state.bot = TradingBot()
+    st.session_state.bot = TradingBot(risk=0.5)
 
-# --- Tabs ---
-tab_dashboard, tab_config, tab_logs, tab_testing, tab_debug = st.tabs(
-    ["Dashboard", "Strategy Config", "Logs", "Model Testing", "Debug"]
-)
+if "trades" not in st.session_state:
+    st.session_state.trades = []
 
-with tab_dashboard:
-    st.header("📊 Live Dashboard")
+# Dashboard tab
+def dashboard():
+    st.title("SAI Trading Bot Dashboard")
+    st.write("Live trading loop with dummy data")
+
+    placeholder = st.empty()
+
+    def run_loop():
+        for price in range(100, 110):
+            action = st.session_state.bot.decide(price)
+            trade = {"price": price, "action": action}
+            st.session_state.trades.append(trade)
+            logging.info(f"Trade executed: {trade}")
+            placeholder.write(trade)
+            time.sleep(1)
+
     if st.button("Start Trading"):
-        if st.session_state.trading_thread is None or not st.session_state.trading_thread.is_alive():
-            def run_bot():
-                st.session_state.bot.run()
-            st.session_state.trading_thread = threading.Thread(target=run_bot, daemon=True)
-            st.session_state.trading_thread.start()
-            logging.info("Trading loop started.")
-    grafana_overlay()
-    prometheus_exporter()
+        threading.Thread(target=run_loop, daemon=True).start()
 
-with tab_config:
-    st.header("⚙️ Strategy Config")
-    st.session_state.bot.config_ui()
+    st.subheader("Trade History")
+    st.write(st.session_state.trades)
 
-with tab_logs:
-    st.header("📜 Logs")
-    with open("sai.log") as f:
-        st.text(f.read())
+# Logs tab
+def logs():
+    st.title("Logs")
+    try:
+        with open("trading.log") as f:
+            st.text(f.read())
+    except FileNotFoundError:
+        st.write("No logs yet.")
 
-with tab_testing:
-    st.header("🧪 Model Testing")
-    st.session_state.bot.test_models()
+# Sidebar navigation
+tab = st.sidebar.radio("Navigation", ["Dashboard", "Logs"])
 
-with tab_debug:
-    st.header("🐞 Debug")
-    st.write("Debugging tools here...")
+if tab == "Dashboard":
+    dashboard()
+elif tab == "Logs":
+    logs()

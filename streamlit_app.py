@@ -7,10 +7,19 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix
+from prometheus_client import Gauge, start_http_server
 
 # --- Setup logging ---
 logging.basicConfig(filename="sai.log", level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s")
+
+# --- Prometheus metrics ---
+trade_metric = Gauge("sai_trades_total", "Total trades executed", ["action"])
+prediction_metric = Gauge("sai_last_prediction", "Last prediction value")
+accuracy_metric = Gauge("sai_model_accuracy", "Model accuracy")
+
+# Start Prometheus exporter on port 8000
+start_http_server(8000)
 
 # --- Session state init ---
 if "running" not in st.session_state:
@@ -29,6 +38,7 @@ def get_latest_features():
 
 def execute_trade(action, features):
     logging.info(f"Trade executed: {action} with features {features.to_dict()}")
+    trade_metric.labels(action=action).inc()
 
 def update_dashboard():
     st.write("Dashboard updated with latest trades/metrics")
@@ -39,6 +49,7 @@ def trading_loop():
         features = get_latest_features()
         if st.session_state.model:
             prediction = st.session_state.model.predict(features)[0]
+            prediction_metric.set(prediction)
             if prediction == 1:
                 execute_trade("BUY", features)
             elif prediction == -1:
@@ -74,8 +85,6 @@ with tab_dashboard:
     st.subheader("Grafana Metrics Overlay")
     grafana_url = "http://localhost:3000/d/your_dashboard_id/trading-performance"
     st.markdown(f"[Open Grafana Dashboard]({grafana_url})")
-
-    # Optional: embed Grafana iframe if allowed
     st.components.v1.iframe(grafana_url, height=600)
 
 # --- Strategy Config Tab ---
@@ -106,6 +115,7 @@ with tab_model_testing:
             if st.session_state.model:
                 predictions = st.session_state.model.predict(X_test)
                 accuracy = st.session_state.model.score(X_test, y_test)
+                accuracy_metric.set(accuracy)
                 st.metric("Accuracy", f"{accuracy:.2f}")
                 results = pd.DataFrame({"Prediction": predictions, "Actual": y_test})
                 st.dataframe(results)

@@ -4,18 +4,39 @@ import time
 import pandas as pd
 import matplotlib.pyplot as plt
 import pickle
+import random
 
-from sai.core.engine import WorkflowEngine 
+# --- Dummy Trading Logic ---
+def generate_trade():
+    # Random decision logic
+    decision = random.choice(["BUY", "SELL", "HOLD"])
+    price = round(random.uniform(95, 110), 2)
+    balance = st.session_state.get("balance", 10000.0)
 
-# Initialize engine once
-if "engine" not in st.session_state:
-    st.session_state["engine"] = WorkflowEngine 
-engine = st.session_state["engine"]
+    # Update balance and positions
+    positions = st.session_state.get("positions", [])
+    if decision == "BUY":
+        balance -= price
+        positions.append(price)
+    elif decision == "SELL" and positions:
+        sell_price = positions.pop()
+        balance += price
+    # HOLD does nothing
+
+    st.session_state["balance"] = balance
+    st.session_state["positions"] = positions
+
+    return {
+        "decision": decision,
+        "price": price,
+        "balance": balance,
+        "positions": positions.copy()
+    }
 
 # --- Live Trading Loop ---
 def trading_loop():
     while st.session_state.get("running", False):
-        result = engine.run()
+        result = generate_trade()
         st.session_state["last_result"] = result
         time.sleep(2)
 
@@ -52,10 +73,11 @@ def dashboard_tab():
 # --- Strategy Config Tab ---
 def strategy_config_tab():
     st.header("Strategy Config")
-    buy_threshold = st.number_input("Buy threshold", value=engine.buy_threshold)
-    sell_threshold = st.number_input("Sell threshold", value=engine.sell_threshold)
+    buy_threshold = st.number_input("Buy threshold", value=100.0)
+    sell_threshold = st.number_input("Sell threshold", value=105.0)
     if st.button("Update Strategy"):
-        engine.set_thresholds(buy_threshold, sell_threshold)
+        st.session_state["buy_threshold"] = buy_threshold
+        st.session_state["sell_threshold"] = sell_threshold
         st.success(f"Updated thresholds: BUY<{buy_threshold}, SELL>{sell_threshold}")
 
 # --- Logs Tab ---
@@ -77,10 +99,10 @@ def model_testing_tab():
 def debug_tab():
     st.header("Debug")
     st.json({
-        "balance": engine.balance,
-        "positions": engine.positions,
-        "buy_threshold": engine.buy_threshold,
-        "sell_threshold": engine.sell_threshold,
+        "balance": st.session_state.get("balance", 10000.0),
+        "positions": st.session_state.get("positions", []),
+        "buy_threshold": st.session_state.get("buy_threshold", 100.0),
+        "sell_threshold": st.session_state.get("sell_threshold", 105.0),
     })
 
 # --- Analytics Tab ---
@@ -133,11 +155,15 @@ def model_registry_tab():
 
 # --- Main App ---
 def main():
-    st.title("SAI Trading Bot")
+    st.title("SAI Trading Bot (Dummy Logic)")
     if "running" not in st.session_state:
         st.session_state["running"] = False
     if "last_result" not in st.session_state:
         st.session_state["last_result"] = None
+    if "balance" not in st.session_state:
+        st.session_state["balance"] = 10000.0
+    if "positions" not in st.session_state:
+        st.session_state["positions"] = []
     tab = st.sidebar.radio("Navigation",
         ["Dashboard", "Strategy Config", "Logs", "Model Testing", "Debug", "Analytics", "Model Registry"])
     if tab == "Dashboard": dashboard_tab()

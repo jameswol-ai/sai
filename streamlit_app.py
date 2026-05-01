@@ -4,112 +4,120 @@ import streamlit as st
 import threading
 import time
 import logging
-import matplotlib.pyplot as plt
+import pickle
 import pandas as pd
-import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import confusion_matrix
 
-# --- Logging setup ---
-logging.basicConfig(
-    filename="sai_app.log",
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
+# --- Setup logging ---
+logging.basicConfig(filename="sai.log", level=logging.INFO,
+                    format="%(asctime)s %(levelname)s %(message)s")
 
 # --- Session state init ---
-if "trades" not in st.session_state:
-    st.session_state.trades = []
 if "running" not in st.session_state:
     st.session_state.running = False
+if "model" not in st.session_state:
+    try:
+        with open("models/model.pkl", "rb") as f:
+            st.session_state.model = pickle.load(f)
+    except Exception:
+        st.session_state.model = None
 
-# --- Dummy trading loop ---
+# --- Placeholder functions ---
+def get_latest_features():
+    # Replace with real market data fetch
+    return pd.DataFrame([[0.5, 0.2]], columns=["feature1", "feature2"])
+
+def execute_trade(action, features):
+    logging.info(f"Trade executed: {action} with features {features.to_dict()}")
+
+def update_dashboard():
+    st.write("Dashboard updated with latest trades/metrics")
+
+# --- Trading loop ---
 def trading_loop():
     while st.session_state.running:
-        start = time.time()
-        price = np.random.randn() * 10 + 100
-        trade = {"time": time.strftime("%H:%M:%S"), "price": price}
-        st.session_state.trades.append(trade)
+        features = get_latest_features()
+        if st.session_state.model:
+            prediction = st.session_state.model.predict(features)[0]
+            if prediction == 1:
+                execute_trade("BUY", features)
+            elif prediction == -1:
+                execute_trade("SELL", features)
+            else:
+                logging.info("Hold position")
+            st.session_state.last_prediction = prediction
+        else:
+            logging.warning("No model loaded")
+        time.sleep(5)
 
-        # Update metrics
-        trade_counter.inc()
-        last_price_gauge.set(price)
-        trade_latency_hist.observe(time.time() - start)
+# --- Streamlit UI ---
+st.title("SAI Trading Bot")
 
-        logging.info(f"Trade executed: {trade}")
-        time.sleep(2)
+tab_dashboard, tab_strategy, tab_logs, tab_model_testing, tab_debug = st.tabs(
+    ["Dashboard", "Strategy Config", "Logs", "Model Testing", "Debug"]
+)
 
-# --- Tabs ---
-tabs = st.tabs(["📊 Dashboard", "⚙️ Strategy Config", "📝 Logs", "🧪 Model Testing", "🐞 Debug"])
-
-# --- Dashboard ---
-with tabs[0]:
-    st.header("Live Trading Dashboard")
-    if st.button("Start Trading", disabled=st.session_state.running):
-        st.session_state.running = True
-        threading.Thread(target=trading_loop, daemon=True).start()
-
-    import pickle
-
-# Load trained model once at startup
-if "model" not in st.session_state:
-    with open("models/model.pkl", "rb") as f:
-        st.session_state.model = pickle.load(f)
-    if st.button("Stop Trading", disabled=not st.session_state.running):
+# --- Dashboard Tab ---
+with tab_dashboard:
+    st.header("Live Dashboard")
+    if st.button("Start Trading"):
+        if not st.session_state.running:
+            st.session_state.running = True
+            threading.Thread(target=trading_loop, daemon=True).start()
+    if st.button("Stop Trading"):
         st.session_state.running = False
 
-    if st.session_state.trades:
-        df = pd.DataFrame(st.session_state.trades)
-        st.line_chart(df.set_index("time")["price"])
-        st.metric("Total Trades", len(df))
-        st.metric("Last Price", df["price"].iloc[-1])
+    if "last_prediction" in st.session_state:
+        st.metric("Last Prediction", st.session_state.last_prediction)
 
-# --- Strategy Config ---
-with tabs[1]:
+# --- Strategy Config Tab ---
+with tab_strategy:
     st.header("Strategy Configuration")
-    risk = st.slider("Risk Level", 1, 10, 5)
-    capital = st.number_input("Capital Allocation", value=1000)
-    st.write(f"Configured risk: {risk}, capital: {capital}")
+    st.text_input("Parameter A")
+    st.text_input("Parameter B")
+    st.button("Save Config")
 
-# --- Logs ---
-with tabs[2]:
-    st.header("Application Logs")
+# --- Logs Tab ---
+with tab_logs:
+    st.header("Logs")
     try:
-        with open("sai_app.log") as f:
-            logs = f.read()
-        st.text_area("Logs", logs, height=300)
+        with open("sai.log") as f:
+            st.text(f.read())
     except FileNotFoundError:
-        st.info("No logs yet.")
+        st.write("No logs yet.")
 
-# --- Model Testing ---
-with tabs[3]:
+# --- Model Testing Tab ---
+with tab_model_testing:
     st.header("Model Testing")
-    st.write("Upload a model.pkl to test predictions.")
-    uploaded = st.file_uploader("Upload model file", type=["pkl"])
-    if uploaded:
-        st.success("Model uploaded (placeholder).")
+    uploaded_file = st.file_uploader("Upload CSV for testing", type=["csv"])
+    if uploaded_file is not None:
+        data = pd.read_csv(uploaded_file)
+        if "target" in data.columns:
+            X_test = data.drop("target", axis=1)
+            y_test = data["target"]
+            if st.session_state.model:
+                predictions = st.session_state.model.predict(X_test)
+                accuracy = st.session_state.model.score(X_test, y_test)
+                st.metric("Accuracy", f"{accuracy:.2f}")
+                results = pd.DataFrame({"Prediction": predictions, "Actual": y_test})
+                st.dataframe(results)
 
-# --- Debug ---
-with tabs[4]:
+                cm = confusion_matrix(y_test, predictions)
+                fig, ax = plt.subplots()
+                sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
+                st.pyplot(fig)
+
+                if st.button("Promote Model to Active Trading"):
+                    st.session_state.model = st.session_state.model
+                    st.success("Model promoted to active trading.")
+            else:
+                st.warning("No model.pkl loaded.")
+        else:
+            st.error("CSV must contain a 'target' column.")
+
+# --- Debug Tab ---
+with tab_debug:
     st.header("Debug Tools")
     st.write("Session State:", st.session_state)
-
-def trading_loop():
-    while st.session_state.running:
-        # Example: get latest market features
-        features = get_latest_features()  # returns DataFrame row
-
-        # Predict action
-        prediction = st.session_state.model.predict(features)[0]
-
-        if prediction == 1:  # Buy signal
-            execute_trade("BUY", features)
-            logging.info("Executed BUY trade")
-        elif prediction == -1:  # Sell signal
-            execute_trade("SELL", features)
-            logging.info("Executed SELL trade")
-        else:
-            logging.info("Hold position")
-
-        # Update charts/metrics
-        update_dashboard()
-        time.sleep(5)  # loop interval
-

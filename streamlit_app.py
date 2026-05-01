@@ -4,7 +4,7 @@ import time
 import logging
 import sys
 import os
-import sai
+import Sai
 
 # Ensure parent directory is on sys.path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))

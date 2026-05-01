@@ -1,174 +1,104 @@
 # sai/streamlit_app.py
-
 import streamlit as st
-import random
+import threading
 import logging
+import time
 
-# =========================================================
-# 🏗️ ARCHITECTURAL DESIGN AI — SOUTH SUDAN EDITION
-# =========================================================
+from sai.bot.main import TradingBot
 
-st.set_page_config(page_title="Architect AI: South Sudan", layout="wide")
-
+# --- Logging setup ---
 logging.basicConfig(
-    filename="architect_ai.log",
+    filename="sai_app.log",
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s"
 )
 
-# ---------------------------
-# SESSION STATE
-# ---------------------------
+# --- Session state init ---
 def init_state():
-    if "designs" not in st.session_state:
-        st.session_state["designs"] = []
-    if "current_design" not in st.session_state:
-        st.session_state["current_design"] = None
-    if "climate_mode" not in st.session_state:
-        st.session_state["climate_mode"] = "Hot & Dry"
-    if "floors" not in st.session_state:
-        st.session_state["floors"] = 1
+    if "bot" not in st.session_state:
+        st.session_state.bot = TradingBot()
+    st.session_state.setdefault("trades", [])
+    st.session_state.setdefault("prices", [])
+    st.session_state.setdefault("trading", False)
 
 init_state()
 
-# ---------------------------
-# CORE ARCHITECTURE ENGINE
-# ---------------------------
-class ArchitectEngine:
-    def __init__(self, climate="Hot & Dry"):
-        self.climate = climate
+# --- Trading loop ---
+def run_trading_loop():
+    while st.session_state.trading:
+        trade, price = st.session_state.bot.execute_trade()
+        if trade is not None:
+            st.session_state.trades.append(trade)
+        if price is not None:
+            st.session_state.prices.append(price)
+        logging.info(f"Trade: {trade}, Price: {price}")
+        time.sleep(2)
 
-    def building_code_profile(self):
-        return {
-            "foundation": "Raised reinforced concrete (flood + soil heat resistance)",
-            "walls": "Compressed earth blocks or stabilized adobe + ventilation gaps",
-            "roof": "Sloped corrugated metal with heat-reflective coating",
-            "ventilation": "Cross-ventilation mandatory",
-            "water_management": "Rainwater harvesting + elevated drainage channels",
-            "heat_strategy": "Shaded courtyards + extended roof overhangs",
-        }
-
-    def generate_floor_plan(self, floors=1, building_type="residential"):
-        base_rooms = ["Living Area", "Kitchen", "Bathroom", "Storage"]
-
-        if building_type == "commercial":
-            base_rooms = ["Retail Space", "Office Area", "Storage", "Service Room"]
-
-        plan = {}
-        for f in range(1, floors + 1):
-            plan[f"Floor {f}"] = random.sample(base_rooms, len(base_rooms))
-
-        return plan
-
-    def multi_store_config(self):
-        return {
-            "ground_floor": "Commercial / Shops / Market stalls",
-            "upper_floors": "Residential housing units",
-            "structure_note": "Separated load zones for vibration + crowd safety"
-        }
-
-    def single_store_config(self):
-        return {
-            "layout": "Single-story spread structure",
-            "use_case": "Residential or small clinic/school",
-            "expansion": "Horizontal modular expansion recommended"
-        }
-
-    def simulate_design(self, floors, building_type):
-        return {
-            "temperature_resilience": f"{random.randint(70, 95)}%",
-            "ventilation_efficiency": f"{random.randint(65, 90)}%",
-            "flood_resistance": f"{random.randint(60, 85)}%",
-            "material_efficiency": f"{random.randint(75, 92)}%",
-        }
-
-engine = ArchitectEngine()
-
-# ---------------------------
-# UI LAYOUT
-# ---------------------------
-st.title("🏗️ Architect AI — South Sudan Design Engine")
-st.caption("Generating climate-aware buildings adapted to local environmental realities")
-
-tab_design, tab_codes, tab_sim, tab_logs = st.tabs(
-    ["📐 Design Generator", "📜 Building Codes", "🧪 Simulation", "🧾 History"]
+# --- Tabs ---
+tab_dashboard, tab_strategy, tab_logs, tab_model, tab_debug = st.tabs(
+    ["📈 Dashboard", "⚙️ Strategy Config", "📝 Logs", "🧪 Model Testing", "🐞 Debug"]
 )
 
-# =========================================================
-# 📐 DESIGN GENERATOR
-# =========================================================
-with tab_design:
-    st.header("Generate Architectural Design")
+# --- Dashboard ---
+with tab_dashboard:
+    st.header("Live Trading Dashboard")
+    col1, col2 = st.columns(2)
+    if col1.button("Start Trading"):
+        if not st.session_state.trading:
+            st.session_state.trading = True
+            threading.Thread(target=run_trading_loop, daemon=True).start()
+    if col2.button("Stop Trading"):
+        st.session_state.trading = False
+    if st.session_state.prices:
+        st.line_chart(st.session_state.prices)
 
-    building_type = st.selectbox("Building Type", ["residential", "commercial"])
-    floors = st.slider("Number of Floors", 1, 5, 1)
-    structure_mode = st.radio("Structure Mode", ["Single Store", "Multi Store"])
+# --- Strategy Config ---
+with tab_strategy:
+    st.header("Strategy Configuration")
+    risk = st.slider("Risk Level", 0.0, 1.0, 0.5)
+    st.session_state.bot.set_param("risk", risk)
+    st.success(f"Risk set to {risk}")
 
-    if st.button("Generate Design"):
-        floor_plan = engine.generate_floor_plan(floors, building_type)
-
-        config = engine.multi_store_config() if structure_mode == "Multi Store" else engine.single_store_config()
-
-        design = {
-            "type": building_type,
-            "floors": floors,
-            "structure": structure_mode,
-            "floor_plan": floor_plan,
-            "config": config,
-            "climate": engine.climate
-        }
-
-        st.session_state.current_design = design
-        st.session_state.designs.append(design)
-
-        logging.info(f"Generated design: {design}")
-
-    if st.session_state.current_design:
-        st.subheader("🧱 Current Design Output")
-        st.json(st.session_state.current_design)
-
-# =========================================================
-# 📜 BUILDING CODES
-# =========================================================
-with tab_codes:
-    st.header("South Sudan Adaptive Building Codes (AI Generated)")
-    st.json(engine.building_code_profile())
-    st.info("These are adaptive AI guidelines for hot climates, flood-prone zones, and mixed urban-rural environments.")
-
-# =========================================================
-# 🧪 SIMULATION
-# =========================================================
-with tab_sim:
-    st.header("Design Performance Simulation")
-
-    if st.session_state.current_design:
-        result = engine.simulate_design(
-            st.session_state.current_design["floors"],
-            st.session_state.current_design["type"]
-        )
-
-        st.subheader("Performance Metrics")
-        st.json(result)
-
-        # Convert percentages safely to float between 0 and 1
-        temp_res = int(result["temperature_resilience"].replace("%", "")) / 100.0
-        vent_eff = int(result["ventilation_efficiency"].replace("%", "")) / 100.0
-
-        st.progress(temp_res)
-        st.progress(vent_eff)
-
-    else:
-        st.warning("Generate a design first to simulate performance.")
-
-# =========================================================
-# 🧾 HISTORY
-# =========================================================
+# --- Logs ---
 with tab_logs:
-    st.header("Design History")
+    st.header("Trading Logs")
+    try:
+        with open("sai_app.log") as f:
+            st.text(f.read())
+    except FileNotFoundError:
+        st.info("No logs yet.")
 
-    if st.session_state.designs:
-        for i, d in enumerate(st.session_state.designs[::-1]):
-            st.markdown(f"### Design #{len(st.session_state.designs)-i}")
-            st.json(d)
-    else:
-        st.info("No designs generated yet.")
+# --- Model Testing ---
+with tab_model:
+    st.header("Model Testing")
+
+    if st.button("Feature Correlation Heatmap"):
+        if hasattr(st.session_state.bot, "X_train"):
+            import pandas as pd, matplotlib.pyplot as plt, seaborn as sns
+            df = pd.DataFrame(st.session_state.bot.X_train)
+            corr = df.corr()
+            fig, ax = plt.subplots(figsize=(6, 4))
+            sns.heatmap(corr, cmap="coolwarm", ax=ax)
+            st.pyplot(fig)
+        else:
+            st.warning("No training data loaded.")
+
+    if st.button("Residual Plot"):
+        if hasattr(st.session_state.bot, "y_pred") and hasattr(st.session_state.bot, "y_true"):
+            import matplotlib.pyplot as plt, seaborn as sns
+            residuals = st.session_state.bot.y_true - st.session_state.bot.y_pred
+            fig, ax = plt.subplots()
+            sns.histplot(residuals, kde=True, ax=ax)
+            ax.set_title("Residual Distribution")
+            st.pyplot(fig)
+        else:
+            st.warning("No predictions available.")
+
+# --- Debug ---
+with tab_debug:
+    st.header("Debug Info")
+    st.json({
+        "trades_count": len(st.session_state.trades),
+        "prices_count": len(st.session_state.prices),
+        "bot_state": str(st.session_state.bot)
+    })

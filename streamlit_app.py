@@ -4,13 +4,13 @@ import time
 import logging
 import sys
 import os
-import Sai
+import sai
 
 # Ensure parent directory is on sys.path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # ✅ Correct import
-from sai.bot.main import TradingBot
+from sai.bot.main import sai
 
 # Configure logging
 logging.basicConfig(

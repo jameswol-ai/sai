@@ -1,7 +1,5 @@
 import streamlit as st
 import logging
-from sai.core.engine import WorkflowEngine
-from sai.bot.main import run_bot
 
 # Configure logging
 logging.basicConfig(
@@ -10,12 +8,22 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
+st.title("SAI Trading Bot Dashboard")
+
+# Try importing WorkflowEngine and run_bot safely
+try:
+    from sai.core.engine import WorkflowEngine
+    from sai.bot.main import run_bot
+except ModuleNotFoundError as e:
+    st.error("Import error: Could not load WorkflowEngine or run_bot. "
+             "Check that your repo has the correct structure and __init__.py files.")
+    st.stop()
+
 # Initialize engine once
 if "engine" not in st.session_state:
     st.session_state.engine = WorkflowEngine()
 
-st.title("SAI Trading Bot Dashboard")
-
+# Tabs
 tab_dashboard, tab_strategy, tab_logs = st.tabs(["Dashboard", "Strategy Config", "Logs"])
 
 with tab_dashboard:

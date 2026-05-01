@@ -1,5 +1,5 @@
 import logging
-import random
+import sai
 from datetime import datetime
 
 class TradingBot:

@@ -10,7 +10,7 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # ✅ Correct import
-from sai.bot.main import TradingBot
+from sai.bot.main import run_bot, get_data, decide_action, SimpleModel
 
 # Configure logging
 logging.basicConfig(

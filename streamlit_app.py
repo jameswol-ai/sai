@@ -5,12 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import pickle
 
- 
-
-# Initialize engine once
-if "engine" not in st.session_state:
-    st.session_state["engine"] = WorkflowEngine 
-engine = st.session_state["engine"]
+from sai.core.engine import WorkflowEngine 
 
 # --- Live Trading Loop ---
 def trading_loop():

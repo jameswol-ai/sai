@@ -214,4 +214,13 @@ def model_registry_tab():
         except Exception as e:
             st.error(f"Failed to load model: {e}")
     if st.session_state["models"]:
-        active_model = st.selectbox("Select Active Model", list(st.session_state
+        active_model = st.selectbox("Select Active Model", list(st.session_state["models"].keys()))
+        st.session_state["active_model"] = active_model
+        st.info(f"Active model: {active_model}")
+
+# --- Main App ---
+def main():
+    st.title("SAI Trading Bot (Binance Live AI)")
+    if "running" not in st.session_state:
+        st.session_state["running"] = False
+    if "last_result" not in st.session_state:

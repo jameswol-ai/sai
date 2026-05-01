@@ -28,8 +28,7 @@ def get_live_price(symbol="BTCUSDT"):
             return float(ticker["price"])
         except Exception as e:
             logging.error(f"Binance price feed error: {e}")
-    # fallback if API fails
-    return round(random.uniform(95, 110), 2)
+    return round(random.uniform(95, 110), 2)  # fallback
 
 # --- Trade Generator with ML Integration ---
 def generate_trade():
@@ -217,4 +216,5 @@ def main():
         st.session_state["last_result"] = None
     if "balance" not in st.session_state:
         st.session_state["balance"] = 10000.0
-    if "positions" not in
+    if "positions" not in st.session_state:
+        st.session_state["positions"] = []

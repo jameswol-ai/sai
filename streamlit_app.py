@@ -187,10 +187,8 @@ def analytics_tab():
     col3.metric("Win Rate", f"{win_rate:.2%}")
     st.metric("Average Price", f"{avg_price:.2f}")
 
-    # --- Charts ---
+    # --- Performance Charts ---
     st.subheader("Performance Charts")
-
-    # Price over time
     fig, ax = plt.subplots()
     ax.plot(df.index, df["price"], marker="o", label="Price")
     ax.set_title("Price Over Time")
@@ -199,7 +197,6 @@ def analytics_tab():
     ax.legend()
     st.pyplot(fig)
 
-    # Balance curve
     fig2, ax2 = plt.subplots()
     ax2.plot(df.index, df["balance"], marker="o", color="green", label="Balance")
     ax2.set_title("Balance Curve")
@@ -207,6 +204,44 @@ def analytics_tab():
     ax2.set_ylabel("Balance")
     ax2.legend()
     st.pyplot(fig2)
+
+    # --- Strategy Comparison ---
+    st.subheader("Strategy Comparison")
+    st.write("Test different thresholds side‑by‑side")
+
+    buy1 = st.number_input("Strategy A Buy Threshold", value=100.0, key="buy1")
+    sell1 = st.number_input("Strategy A Sell Threshold", value=105.0, key="sell1")
+    buy2 = st.number_input("Strategy B Buy Threshold", value=98.0, key="buy2")
+    sell2 = st.number_input("Strategy B Sell Threshold", value=108.0, key="sell2")
+
+    if st.button("Compare Strategies"):
+        # Replay history with each strategy
+        def simulate(df, buy, sell):
+            balance = 10000.0
+            positions = []
+            balances = []
+            for _, row in df.iterrows():
+                price = row["price"]
+                if price < buy:
+                    positions.append(price)
+                    balance -= price
+                elif price > sell and positions:
+                    entry = positions.pop(0)
+                    balance += price
+                balances.append(balance)
+            return balances
+
+        balances_a = simulate(df, buy1, sell1)
+        balances_b = simulate(df, buy2, sell2)
+
+        fig3, ax3 = plt.subplots()
+        ax3.plot(df.index, balances_a, label="Strategy A", color="blue")
+        ax3.plot(df.index, balances_b, label="Strategy B", color="orange")
+        ax3.set_title("Strategy Balance Comparison")
+        ax3.set_xlabel("Trade #")
+        ax3.set_ylabel("Balance")
+        ax3.legend()
+        st.pyplot(fig3)
 
     # --- CSV Export ---
     csv = df.to_csv(index=False).encode("utf-8")

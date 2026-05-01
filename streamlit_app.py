@@ -49,8 +49,15 @@ with tab_dashboard:
             threading.Thread(target=run_trading_loop, daemon=True).start()
     if col2.button("Stop Trading"):
         st.session_state.trading = False
+
     if st.session_state.prices:
         st.line_chart(st.session_state.prices)
+
+    # Quick metrics panel
+    st.subheader("Metrics")
+    st.metric("Trades Executed", len(st.session_state.trades))
+    if st.session_state.prices:
+        st.metric("Latest Price", st.session_state.prices[-1])
 
 # --- Strategy Config ---
 with tab_strategy:

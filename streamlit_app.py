@@ -8,7 +8,7 @@ import pickle
 
 # Initialize engine once
 if "engine" not in st.session_state:
-    st.session_state["engine"] = WorkflowEngine()
+    st.session_state["engine"] 
 engine = st.session_state["engine"]
 
 # --- Live Trading Loop ---

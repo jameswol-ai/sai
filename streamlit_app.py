@@ -1,6 +1,12 @@
 # sai/streamlit_app.py
 
-from sai.core.engine import WorkflowEngine
+import sys, os
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+
+try:
+    from sai.core.engine import WorkflowEngine
+except ModuleNotFoundError:
+    from core.engine import WorkflowEngine
 import streamlit as st
 import threading
 import time

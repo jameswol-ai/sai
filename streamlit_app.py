@@ -158,3 +158,61 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# --- Analytics Tab ---
+import pandas as pd
+import matplotlib.pyplot as plt
+
+def analytics_tab():
+    st.header("Analytics")
+
+    if "history" not in st.session_state or not st.session_state["history"]:
+        st.warning("No trading history yet. Run the bot first.")
+        return
+
+    df = pd.DataFrame(st.session_state["history"])
+
+    # --- Quick Metrics ---
+    st.subheader("Quick Metrics")
+    total_trades = len(df)
+    buys = (df["decision"] == "BUY").sum()
+    sells = (df["decision"] == "SELL").sum()
+    holds = (df["decision"] == "HOLD").sum()
+    avg_price = df["price"].mean()
+    win_rate = sells / total_trades if total_trades > 0 else 0
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Trades", total_trades)
+    col2.metric("Buys / Sells / Holds", f"{buys}/{sells}/{holds}")
+    col3.metric("Win Rate", f"{win_rate:.2%}")
+    st.metric("Average Price", f"{avg_price:.2f}")
+
+    # --- Charts ---
+    st.subheader("Performance Charts")
+
+    # Price over time
+    fig, ax = plt.subplots()
+    ax.plot(df.index, df["price"], marker="o", label="Price")
+    ax.set_title("Price Over Time")
+    ax.set_xlabel("Trade #")
+    ax.set_ylabel("Price")
+    ax.legend()
+    st.pyplot(fig)
+
+    # Balance curve
+    fig2, ax2 = plt.subplots()
+    ax2.plot(df.index, df["balance"], marker="o", color="green", label="Balance")
+    ax2.set_title("Balance Curve")
+    ax2.set_xlabel("Trade #")
+    ax2.set_ylabel("Balance")
+    ax2.legend()
+    st.pyplot(fig2)
+
+    # --- CSV Export ---
+    csv = df.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        label="Download Trading History CSV",
+        data=csv,
+        file_name="trading_history.csv",
+        mime="text/csv",
+    )

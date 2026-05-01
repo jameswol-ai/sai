@@ -1,40 +1,36 @@
+# sai/bot/main.py
 import logging
-import Sai
-from datetime import datetime
+import random
+import pandas as pd
 
-from core.engine import WorkflowEngine
-import json
+logger = logging.getLogger(__name__)
 
-class Sai:
-    def __init__(self, risk=0.5):
-        self.risk = risk
-        self.trades = []
-        self.logger = logging.getLogger("TradingBot")
-        self.logger.setLevel(logging.INFO)
+class SimpleModel:
+    """A placeholder ML model for trading decisions."""
+    def predict(self, data: pd.DataFrame) -> str:
+        # Replace with real ML logic
+        return random.choice(["BUY", "SELL", "HOLD"])
 
-    def decide(self, price: float) -> str:
-        """Simple placeholder decision logic."""
-        action = "BUY" if random.random() < 0.5 else "SELL"
-        self.logger.info(f"Decision: {action} at {price}")
-        return action
+def get_data() -> pd.DataFrame:
+    """Fetch or simulate market data."""
+    # Replace with API calls or database queries
+    data = pd.DataFrame({
+        "price": [100 + random.uniform(-5, 5) for _ in range(10)],
+        "volume": [random.randint(100, 1000) for _ in range(10)]
+    })
+    return data
 
-    def execute_trade(self, price: float):
-        """Simulate trade execution and record metrics."""
-        action = self.decide(price)
-        trade = {
-            "time": datetime.now().strftime("%H:%M:%S"),
-            "price": price,
-            "action": action
-        }
-        self.trades.append(trade)
-        return trade
+def decide_action(model: SimpleModel, data: pd.DataFrame) -> str:
+    """Use the model to decide trading action."""
+    action = model.predict(data)
+    logger.info(f"Model decided action: {action}")
+    return action
 
-    def get_metrics(self):
-        """Return quick metrics for dashboard panels."""
-        buys = sum(1 for t in self.trades if t["action"] == "BUY")
-        sells = sum(1 for t in self.trades if t["action"] == "SELL")
-        return {
-            "total_trades": len(self.trades),
-            "buys": buys,
-            "sells": sells
-        }
+def run_bot():
+    """Run one trading cycle."""
+    logger.info("Running trading bot cycle...")
+    data = get_data()
+    model = SimpleModel()
+    action = decide_action(model, data)
+    logger.info(f"Executed action: {action}")
+    return {"action": action, "latest_price": data['price'].iloc[-1]}

@@ -10,7 +10,7 @@ if __name__ == "__main__":
     print(run_bot())
 
 tab = st.sidebar.radio("Navigation", 
-                       ["Dashboard", "Strategy Config", "Logs", "Model Testing", "Debug", "Analytics"])
+                       ["Dashboard", "Strategy Config", "Logs", "Model Testing", "Debug", "Analytics", "Model Registry"])
 
 if tab == "Dashboard":
     dashboard_tab()
@@ -24,3 +24,5 @@ elif tab == "Debug":
     debug_tab()
 elif tab == "Analytics":
     analytics_tab()
+elif tab == "Model Registry":
+    model_registry_tab()

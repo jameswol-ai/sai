@@ -5,7 +5,7 @@ import random
 from datetime import datetime
 
 class WorkflowEngine:
-    def __init__(self):
+    def __init__(self, buy_threshold=100.0, sell_threshold=105.0):
         self.logger = logging.getLogger("WorkflowEngine")
         self.logger.setLevel(logging.INFO)
         handler = logging.FileHandler("workflow.log")
@@ -14,19 +14,24 @@ class WorkflowEngine:
 
         self.balance = 10000.0
         self.positions = []
+        self.buy_threshold = buy_threshold
+        self.sell_threshold = sell_threshold
+
+    def set_thresholds(self, buy, sell):
+        self.buy_threshold = buy
+        self.sell_threshold = sell
+        self.logger.info(f"Thresholds updated: BUY<{buy}, SELL>{sell}")
 
     def fetch_data(self):
-        # Placeholder: replace with real market API
         price = round(random.uniform(90, 110), 2)
         self.logger.info(f"Fetched price: {price}")
         return {"timestamp": datetime.now(), "price": price}
 
     def decide(self, market_data):
-        # Simple strategy: buy if price < 100, sell if > 105
         price = market_data["price"]
-        if price < 100:
+        if price < self.buy_threshold:
             decision = "BUY"
-        elif price > 105:
+        elif price > self.sell_threshold:
             decision = "SELL"
         else:
             decision = "HOLD"

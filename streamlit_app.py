@@ -5,14 +5,17 @@ import threading
 import time
 from sai.core.engine import WorkflowEngine
 
-engine = WorkflowEngine()
+# Initialize engine once
+if "engine" not in st.session_state:
+    st.session_state["engine"] = WorkflowEngine()
+engine = st.session_state["engine"]
 
 # --- Live Trading Loop ---
 def trading_loop():
     while st.session_state.get("running", False):
         result = engine.run()
         st.session_state["last_result"] = result
-        time.sleep(2)  # adjust frequency
+        time.sleep(2)
 
 def start_trading():
     if not st.session_state.get("running", False):
@@ -26,7 +29,6 @@ def stop_trading():
 # --- Dashboard Tab ---
 def dashboard_tab():
     st.header("Dashboard")
-
     col1, col2 = st.columns(2)
     if col1.button("Start Live Trading"):
         start_trading()
@@ -43,10 +45,12 @@ def dashboard_tab():
 # --- Strategy Config Tab ---
 def strategy_config_tab():
     st.header("Strategy Config")
-    buy_threshold = st.number_input("Buy threshold", value=100.0)
-    sell_threshold = st.number_input("Sell threshold", value=105.0)
-    st.write("Configured thresholds:", buy_threshold, sell_threshold)
-    # Later: feed into engine.decide()
+    buy_threshold = st.number_input("Buy threshold", value=engine.buy_threshold)
+    sell_threshold = st.number_input("Sell threshold", value=engine.sell_threshold)
+
+    if st.button("Update Strategy"):
+        engine.set_thresholds(buy_threshold, sell_threshold)
+        st.success(f"Updated thresholds: BUY<{buy_threshold}, SELL>{sell_threshold}")
 
 # --- Logs Tab ---
 def logs_tab():
@@ -69,6 +73,8 @@ def debug_tab():
     st.json({
         "balance": engine.balance,
         "positions": engine.positions,
+        "buy_threshold": engine.buy_threshold,
+        "sell_threshold": engine.sell_threshold,
     })
 
 # --- Main App ---

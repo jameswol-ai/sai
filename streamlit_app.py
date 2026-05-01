@@ -187,7 +187,7 @@ def analytics_tab():
     col3.metric("Win Rate", f"{win_rate:.2%}")
     st.metric("Average Price", f"{avg_price:.2f}")
 
-    # --- Performance Charts ---
+    # --- Charts ---
     st.subheader("Performance Charts")
     fig, ax = plt.subplots()
     ax.plot(df.index, df["price"], marker="o", label="Price")
@@ -207,37 +207,54 @@ def analytics_tab():
 
     # --- Strategy Comparison ---
     st.subheader("Strategy Comparison")
-    st.write("Test different thresholds side‑by‑side")
-
     buy1 = st.number_input("Strategy A Buy Threshold", value=100.0, key="buy1")
     sell1 = st.number_input("Strategy A Sell Threshold", value=105.0, key="sell1")
     buy2 = st.number_input("Strategy B Buy Threshold", value=98.0, key="buy2")
     sell2 = st.number_input("Strategy B Sell Threshold", value=108.0, key="sell2")
 
-    if st.button("Compare Strategies"):
-        # Replay history with each strategy
-        def simulate(df, buy, sell):
+    # --- Model Comparison ---
+    st.subheader("Model Comparison")
+    model_choice = st.selectbox("Select Models to Compare", ["Baseline Thresholds", "Random Model", "ML Predictor"])
+
+    if st.button("Compare Strategies & Models"):
+        def simulate(df, buy, sell, model="baseline"):
             balance = 10000.0
             positions = []
             balances = []
             for _, row in df.iterrows():
                 price = row["price"]
-                if price < buy:
+                if model == "random":
+                    import random
+                    decision = random.choice(["BUY", "SELL", "HOLD"])
+                elif model == "ml":
+                    # Placeholder: replace with real ML model prediction
+                    decision = "BUY" if price % 2 == 0 else "SELL"
+                else:
+                    if price < buy:
+                        decision = "BUY"
+                    elif price > sell and positions:
+                        decision = "SELL"
+                    else:
+                        decision = "HOLD"
+
+                if decision == "BUY":
                     positions.append(price)
                     balance -= price
-                elif price > sell and positions:
+                elif decision == "SELL" and positions:
                     entry = positions.pop(0)
                     balance += price
                 balances.append(balance)
             return balances
 
-        balances_a = simulate(df, buy1, sell1)
-        balances_b = simulate(df, buy2, sell2)
+        balances_a = simulate(df, buy1, sell1, model="baseline")
+        balances_b = simulate(df, buy2, sell2, model="baseline")
+        balances_ml = simulate(df, buy1, sell1, model="ml")
 
         fig3, ax3 = plt.subplots()
         ax3.plot(df.index, balances_a, label="Strategy A", color="blue")
         ax3.plot(df.index, balances_b, label="Strategy B", color="orange")
-        ax3.set_title("Strategy Balance Comparison")
+        ax3.plot(df.index, balances_ml, label="ML Predictor", color="red")
+        ax3.set_title("Strategy & Model Balance Comparison")
         ax3.set_xlabel("Trade #")
         ax3.set_ylabel("Balance")
         ax3.legend()

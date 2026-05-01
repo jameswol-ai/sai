@@ -1,0 +1,51 @@
+{
+  "panels": [
+    {
+      "title": "Trades Executed",
+      "type": "graph",
+      "targets": [
+        {
+          "expr": "sai_trades_total",
+          "legendFormat": "{{action}}"
+        }
+      ],
+      "lines": true,
+      "linewidth": 2
+    },
+    {
+      "title": "Last Prediction",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "sai_last_prediction"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": ["last"]
+        }
+      }
+    },
+    {
+      "title": "Model Accuracy",
+      "type": "gauge",
+      "targets": [
+        {
+          "expr": "sai_model_accuracy"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": ["last"]
+        },
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true
+      }
+    }
+  ],
+  "title": "SAI Trading Bot Dashboard",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  }
+}

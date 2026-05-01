@@ -6,35 +6,14 @@ import matplotlib.pyplot as plt
 import pickle
 import random
 import logging
-from binance.client import Client
 
 # --- Logging Setup ---
 logging.basicConfig(filename="workflow.log", level=logging.INFO,
                     format="%(asctime)s - %(levelname)s - %(message)s")
 
-# --- Binance Client Setup ---
-def init_binance():
-    api_key = st.session_state.get("binance_api_key", "")
-    api_secret = st.session_state.get("binance_api_secret", "")
-    if api_key and api_secret:
-        return Client(api_key, api_secret)
-    return None
-
-def get_live_price(symbol="BTCUSDT"):
-    client = init_binance()
-    if client:
-        try:
-            ticker = client.get_symbol_ticker(symbol=symbol)
-            return float(ticker["price"])
-        except Exception as e:
-            logging.error(f"Binance price feed error: {e}")
-    # fallback if API fails
-    return round(random.uniform(95, 110), 2)
-
 # --- Trade Generator with ML Integration ---
 def generate_trade():
-    symbol = st.session_state.get("symbol", "BTCUSDT")
-    price = get_live_price(symbol)
+    price = round(random.uniform(95, 110), 2)  # Replace with live feed later
     balance = st.session_state.get("balance", 10000.0)
     positions = st.session_state.get("positions", [])
 
@@ -82,7 +61,7 @@ def trading_loop():
         if "history" not in st.session_state:
             st.session_state["history"] = []
         st.session_state["history"].append(result)
-        time.sleep(5)  # slower loop for live feed
+        time.sleep(2)
 
 def start_trading():
     if not st.session_state.get("running", False):
@@ -114,16 +93,10 @@ def strategy_config_tab():
     st.header("Strategy Config")
     buy_threshold = st.number_input("Buy threshold", value=100.0)
     sell_threshold = st.number_input("Sell threshold", value=105.0)
-    symbol = st.text_input("Trading Symbol (e.g. BTCUSDT)", value=st.session_state.get("symbol", "BTCUSDT"))
-    api_key = st.text_input("Binance API Key", type="password")
-    api_secret = st.text_input("Binance API Secret", type="password")
     if st.button("Update Strategy"):
         st.session_state["buy_threshold"] = buy_threshold
         st.session_state["sell_threshold"] = sell_threshold
-        st.session_state["symbol"] = symbol
-        st.session_state["binance_api_key"] = api_key
-        st.session_state["binance_api_secret"] = api_secret
-        st.success(f"Updated: BUY<{buy_threshold}, SELL>{sell_threshold}, Symbol={symbol}")
+        st.success(f"Updated thresholds: BUY<{buy_threshold}, SELL>{sell_threshold}")
 
 # --- Logs Tab ---
 def logs_tab():
@@ -157,8 +130,7 @@ def debug_tab():
         "positions": st.session_state.get("positions", []),
         "buy_threshold": st.session_state.get("buy_threshold", 100.0),
         "sell_threshold": st.session_state.get("sell_threshold", 105.0),
-        "active_model": st.session_state.get("active_model"),
-        "symbol": st.session_state.get("symbol", "BTCUSDT")
+        "active_model": st.session_state.get("active_model")
     })
 
 # --- Analytics Tab ---
@@ -220,7 +192,24 @@ def model_registry_tab():
 
 # --- Main App ---
 def main():
-    st.title("SAI Trading Bot (Binance Live AI)")
+    st.title("SAI Trading Bot (AI-Driven)")
     if "running" not in st.session_state:
         st.session_state["running"] = False
     if "last_result" not in st.session_state:
+        st.session_state["last_result"] = None
+    if "balance" not in st.session_state:
+        st.session_state["balance"] = 10000.0
+    if "positions" not in st.session_state:
+        st.session_state["positions"] = []
+    tab = st.sidebar.radio("Navigation",
+        ["Dashboard", "Strategy Config", "Logs", "Model Testing", "Debug", "Analytics", "Model Registry"])
+    if tab == "Dashboard": dashboard_tab()
+    elif tab == "Strategy Config": strategy_config_tab()
+    elif tab == "Logs": logs_tab()
+    elif tab == "Model Testing": model_testing_tab()
+    elif tab == "Debug": debug_tab()
+    elif tab == "Analytics": analytics_tab()
+    elif tab == "Model Registry": model_registry_tab()
+
+if __name__ == "__main__":
+    main()

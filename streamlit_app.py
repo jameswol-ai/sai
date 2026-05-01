@@ -27,7 +27,6 @@ def stop_trading():
     st.session_state["running"] = False
 
 # --- Dashboard Tab ---
-# --- Dashboard Tab ---
 import pandas as pd
 
 def dashboard_tab():
@@ -45,22 +44,32 @@ def dashboard_tab():
         st.metric("Balance", result["balance"])
         st.write("Positions:", result["positions"])
 
-    # --- CSV Export ---
+    # --- History Tracking ---
     if "history" not in st.session_state:
         st.session_state["history"] = []
 
     if result:
         st.session_state["history"].append(result)
 
-    if st.button("Export Trading History to CSV"):
+    # --- Metrics Panel ---
+    if st.session_state["history"]:
         df = pd.DataFrame(st.session_state["history"])
-        csv = df.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            label="Download CSV",
-            data=csv,
-            file_name="trading_history.csv",
-            mime="text/csv",
-        )
+        st.subheader("Quick Metrics")
+        total_trades = len(df)
+        buys = (df["decision"] == "BUY").sum()
+        sells = (df["decision"] == "SELL").sum()
+        holds = (df["decision"] == "HOLD").sum()
+        avg_price = df["price"].mean()
+        win_rate = sells / total_trades if total_trades > 0 else 0
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Trades", total_trades)
+        col2.metric("Buys / Sells / Holds", f"{buys}/{sells}/{holds}")
+        col3.metric("Win Rate", f"{win_rate:.2%}")
+
+        st.metric("Average Price", f"{avg_price:.2f}")
+
+    # --- CSV Export ---
         
 # --- Strategy Config Tab ---
 def strategy_config_tab():

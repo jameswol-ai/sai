@@ -5,10 +5,6 @@ class WorkflowEngine:
         self.counter = 0
 
     def run(self, data: dict):
-        """
-        Minimal workflow execution stub.
-        Replace with trading workflow logic later.
-        """
         self.counter += 1
         return {
             "status": "ok",

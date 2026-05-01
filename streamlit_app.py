@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import pickle
 import random
 import logging
-from binance.client import sai.configs.binance
+from binance import sai.configs.binance
 
 # --- Logging Setup ---
 logging.basicConfig(filename="workflow.log", level=logging.INFO,

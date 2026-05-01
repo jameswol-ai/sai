@@ -1,5 +1,5 @@
-# sai/bot/__init__.py
+# Marks 'sai.bot' as a package
+# Optional: expose run_bot directly
+from .main import run_bot
 
-sai/__init__.py
-sai/core/__init__.py
-sai/bot/__init__.py
+__all__ = ["run_bot"]

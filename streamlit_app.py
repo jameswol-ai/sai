@@ -41,9 +41,6 @@ def trading_loop():
 tabs = st.tabs(["📊 Dashboard", "⚙️ Strategy Config", "📝 Logs", "🧪 Model Testing", "🐞 Debug"])
 
 # --- Dashboard ---
-
-st.metric("Last Prediction", prediction)
-
 with tabs[0]:
     st.header("Live Trading Dashboard")
     if st.button("Start Trading", disabled=st.session_state.running):

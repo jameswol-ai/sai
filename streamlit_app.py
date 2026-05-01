@@ -1,15 +1,9 @@
 # sai/streamlit_app.py
-
 import streamlit as st
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 import threading
 import logging
 import time
 
-# Import your bot core (adjust path if needed)
 from sai.bot.main import TradingBot
 
 # --- Logging setup ---
@@ -20,72 +14,78 @@ logging.basicConfig(
 )
 
 # --- Session state init ---
-if "bot" not in st.session_state:
-    st.session_state.bot = TradingBot()
-if "trades" not in st.session_state:
-    st.session_state.trades = []
-if "prices" not in st.session_state:
-    st.session_state.prices = []
-if "trading" not in st.session_state:
-    st.session_state.trading = False
+def init_state():
+    if "bot" not in st.session_state:
+        st.session_state.bot = TradingBot()
+    st.session_state.setdefault("trades", [])
+    st.session_state.setdefault("prices", [])
+    st.session_state.setdefault("trading", False)
+
+init_state()
+
+# --- Trading loop ---
+def run_trading_loop():
+    while st.session_state.trading:
+        trade, price = st.session_state.bot.execute_trade()
+        if trade is not None:
+            st.session_state.trades.append(trade)
+        if price is not None:
+            st.session_state.prices.append(price)
+        logging.info(f"Trade: {trade}, Price: {price}")
+        time.sleep(2)
 
 # --- Tabs ---
-tabs = st.tabs(["Dashboard", "Strategy Config", "Logs", "Model Testing", "Debug"])
+tab_dashboard, tab_strategy, tab_logs, tab_model, tab_debug = st.tabs(
+    ["📈 Dashboard", "⚙️ Strategy Config", "📝 Logs", "🧪 Model Testing", "🐞 Debug"]
+)
 
 # --- Dashboard ---
-with tabs[0]:
-    st.header("📈 Live Trading Dashboard")
-
-    def run_trading_loop():
-        while st.session_state.trading:
-            trade, price = st.session_state.bot.execute_trade()
-            st.session_state.trades.append(trade)
-            st.session_state.prices.append(price)
-            logging.info(f"Trade: {trade}, Price: {price}")
-            time.sleep(2)
-
-    if st.button("Start Trading"):
-        st.session_state.trading = True
-        threading.Thread(target=run_trading_loop, daemon=True).start()
-
-    if st.button("Stop Trading"):
+with tab_dashboard:
+    st.header("Live Trading Dashboard")
+    col1, col2 = st.columns(2)
+    if col1.button("Start Trading"):
+        if not st.session_state.trading:
+            st.session_state.trading = True
+            threading.Thread(target=run_trading_loop, daemon=True).start()
+    if col2.button("Stop Trading"):
         st.session_state.trading = False
-
     if st.session_state.prices:
         st.line_chart(st.session_state.prices)
 
 # --- Strategy Config ---
-with tabs[1]:
-    st.header("⚙️ Strategy Configuration")
+with tab_strategy:
+    st.header("Strategy Configuration")
     risk = st.slider("Risk Level", 0.0, 1.0, 0.5)
     st.session_state.bot.set_param("risk", risk)
-    st.write(f"Risk set to {risk}")
+    st.success(f"Risk set to {risk}")
 
 # --- Logs ---
-with tabs[2]:
-    st.header("📝 Logs")
+with tab_logs:
+    st.header("Trading Logs")
     try:
         with open("sai_app.log") as f:
             st.text(f.read())
     except FileNotFoundError:
-        st.warning("No logs yet.")
+        st.info("No logs yet.")
 
 # --- Model Testing ---
-with tabs[3]:
-    st.header("🧪 Model Testing")
+with tab_model:
+    st.header("Model Testing")
 
-    if st.button("Show Feature Correlation Heatmap"):
+    if st.button("Feature Correlation Heatmap"):
         if hasattr(st.session_state.bot, "X_train"):
+            import pandas as pd, matplotlib.pyplot as plt, seaborn as sns
             df = pd.DataFrame(st.session_state.bot.X_train)
             corr = df.corr()
-            fig, ax = plt.subplots(figsize=(8,6))
-            sns.heatmap(corr, annot=True, cmap="coolwarm", ax=ax)
+            fig, ax = plt.subplots(figsize=(6, 4))
+            sns.heatmap(corr, cmap="coolwarm", ax=ax)
             st.pyplot(fig)
         else:
             st.warning("No training data loaded.")
 
     if st.button("Residual Plot"):
         if hasattr(st.session_state.bot, "y_pred") and hasattr(st.session_state.bot, "y_true"):
+            import matplotlib.pyplot as plt, seaborn as sns
             residuals = st.session_state.bot.y_true - st.session_state.bot.y_pred
             fig, ax = plt.subplots()
             sns.histplot(residuals, kde=True, ax=ax)
@@ -95,8 +95,8 @@ with tabs[3]:
             st.warning("No predictions available.")
 
 # --- Debug ---
-with tabs[4]:
-    st.header("🐞 Debug Info")
+with tab_debug:
+    st.header("Debug Info")
     st.json({
         "trades_count": len(st.session_state.trades),
         "prices_count": len(st.session_state.prices),

@@ -3,6 +3,9 @@ import streamlit as st
 import threading
 import logging
 import time
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 from sai.bot.main import TradingBot
 
@@ -17,21 +20,27 @@ logging.basicConfig(
 def init_state():
     if "bot" not in st.session_state:
         st.session_state.bot = TradingBot()
-    st.session_state.setdefault("trades", [])
-    st.session_state.setdefault("prices", [])
-    st.session_state.setdefault("trading", False)
+    if "trades" not in st.session_state:
+        st.session_state.trades = []
+    if "prices" not in st.session_state:
+        st.session_state.prices = []
+    if "trading" not in st.session_state:
+        st.session_state.trading = False
 
 init_state()
 
 # --- Trading loop ---
 def run_trading_loop():
     while st.session_state.trading:
-        trade, price = st.session_state.bot.execute_trade()
-        if trade is not None:
-            st.session_state.trades.append(trade)
-        if price is not None:
-            st.session_state.prices.append(price)
-        logging.info(f"Trade: {trade}, Price: {price}")
+        try:
+            trade, price = st.session_state.bot.execute_trade()
+            if trade is not None:
+                st.session_state.trades.append(trade)
+            if price is not None:
+                st.session_state.prices.append(price)
+            logging.info(f"Trade: {trade}, Price: {price}")
+        except Exception as e:
+            logging.error(f"Error in trading loop: {e}")
         time.sleep(2)
 
 # --- Tabs ---
@@ -53,7 +62,6 @@ with tab_dashboard:
     if st.session_state.prices:
         st.line_chart(st.session_state.prices)
 
-    # Quick metrics panel
     st.subheader("Metrics")
     st.metric("Trades Executed", len(st.session_state.trades))
     if st.session_state.prices:
@@ -81,7 +89,6 @@ with tab_model:
 
     if st.button("Feature Correlation Heatmap"):
         if hasattr(st.session_state.bot, "X_train"):
-            import pandas as pd, matplotlib.pyplot as plt, seaborn as sns
             df = pd.DataFrame(st.session_state.bot.X_train)
             corr = df.corr()
             fig, ax = plt.subplots(figsize=(6, 4))
@@ -92,7 +99,6 @@ with tab_model:
 
     if st.button("Residual Plot"):
         if hasattr(st.session_state.bot, "y_pred") and hasattr(st.session_state.bot, "y_true"):
-            import matplotlib.pyplot as plt, seaborn as sns
             residuals = st.session_state.bot.y_true - st.session_state.bot.y_pred
             fig, ax = plt.subplots()
             sns.histplot(residuals, kde=True, ax=ax)

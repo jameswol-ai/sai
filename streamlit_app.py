@@ -1,5 +1,3 @@
-# sai/streamlit_app.py
-
 import streamlit as st
 import threading
 import time
@@ -71,6 +69,14 @@ with tab_dashboard:
 
     if "last_prediction" in st.session_state:
         st.metric("Last Prediction", st.session_state.last_prediction)
+
+    # Grafana integration
+    st.subheader("Grafana Metrics Overlay")
+    grafana_url = "http://localhost:3000/d/your_dashboard_id/trading-performance"
+    st.markdown(f"[Open Grafana Dashboard]({grafana_url})")
+
+    # Optional: embed Grafana iframe if allowed
+    st.components.v1.iframe(grafana_url, height=600)
 
 # --- Strategy Config Tab ---
 with tab_strategy:

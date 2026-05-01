@@ -1,9 +1,9 @@
 # sai/streamlit_app.py
 
+from sai.core.engine import WorkflowEngine
 import streamlit as st
 import threading
 import time
-from sai.core.engine import WorkflowEngine
 
 # Initialize engine once
 if "engine" not in st.session_state:

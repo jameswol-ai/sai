@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import pickle
 import random
 import logging
-from binance.client import Client
+from binance.client import sai.configs.binance
 
 # --- Logging Setup ---
 logging.basicConfig(filename="workflow.log", level=logging.INFO,
@@ -17,14 +17,14 @@ def init_binance():
     api_key = st.session_state.get("binance_api_key", "")
     api_secret = st.session_state.get("binance_api_secret", "")
     if api_key and api_secret:
-        return Client(api_key, api_secret)
+        return sai.configs.binance(api_key, api_secret)
     return None
 
 def get_live_price(symbol="BTCUSDT"):
     client = init_binance()
     if client:
         try:
-            ticker = client.get_symbol_ticker(symbol=symbol)
+            ticker = sai.configs.binance.get_symbol_ticker(symbol=symbol)
             return float(ticker["price"])
         except Exception as e:
             logging.error(f"Binance price feed error: {e}")

@@ -1,65 +1,60 @@
 # sai/streamlit_app.py
+
+import os
 import streamlit as st
-import threading
-import time
-import logging
-from sai.bot.main import run_bot, get_data, decide_action, SimpleModel
 
-# Configure logging
-logging.basicConfig(filename="sai.log", level=logging.INFO,
-                    format="%(asctime)s - %(levelname)s - %(message)s")
-
-# Initialize session state
-if "trades" not in st.session_state:
-    st.session_state.trades = []
-if "running" not in st.session_state:
-    st.session_state.running = False
-
-def trading_loop():
-    while st.session_state.running:
-        result = run_bot()
-        st.session_state.trades.append(result)
-        time.sleep(2)
-
-# Streamlit UI
-st.title("SAI Trading Bot Dashboard")
-
-tab_dashboard, tab_strategy, tab_logs, tab_testing, tab_debug = st.tabs(
-    ["Dashboard", "Strategy Config", "Logs", "Model Testing", "Debug"]
+from sai.core.engine import WorkflowEngine
+from sai.stages.sample_stages import (
+    ingest_stage,
+    analysis_stage,
+    decision_stage,
+    execution_stage,
 )
 
-with tab_dashboard:
-    st.header("Live Trading")
-    if st.button("Start Trading") and not st.session_state.running:
-        st.session_state.running = True
-        threading.Thread(target=trading_loop, daemon=True).start()
-    if st.button("Stop Trading"):
-        st.session_state.running = False
+# Registry file path
+REGISTRY_FILE = "sai/models/registry.json"
 
-    st.subheader("Trade History")
-    st.write(st.session_state.trades)
+def ensure_registry_file():
+    """Ensure the model registry file exists."""
+    if not os.path.exists(REGISTRY_FILE):
+        with open(REGISTRY_FILE, "w") as f:
+            f.write("{}")
 
-with tab_strategy:
-    st.header("Strategy Configuration")
-    risk_level = st.slider("Risk Level", 1, 10, 5)
-    st.write(f"Current risk level: {risk_level}")
+def load_registry():
+    """Load the model registry JSON as a string."""
+    ensure_registry_file()
+    with open(REGISTRY_FILE, "r") as f:
+        return f.read()
 
-with tab_logs:
-    st.header("Logs")
-    try:
-        with open("sai.log", "r") as f:
-            st.text(f.read())
-    except FileNotFoundError:
-        st.write("No logs yet.")
+def save_registry(content: str):
+    """Save content back to the registry file."""
+    with open(REGISTRY_FILE, "w") as f:
+        f.write(content)
 
-with tab_testing:
-    st.header("Model Testing")
-    data = get_data()
-    model = SimpleModel()
-    action = decide_action(model, data)
-    st.write("Test Data:", data)
-    st.write("Model Action:", action)
+# Define workflow
+workflow = {
+    "trading_pipeline": [
+        {"name": "ingest", "function": ingest_stage},
+        {"name": "analysis", "function": analysis_stage},
+        {"name": "decision", "function": decision_stage},
+        {"name": "execution", "function": execution_stage},
+    ]
+}
 
-with tab_debug:
-    st.header("Debug Info")
-    st.json(st.session_state)
+# Streamlit UI
+st.title("📈 SAI Trading Bot Workflow")
+
+user_input = st.text_input("Enter market symbol or dataset path:")
+
+if st.button("Run Trading Workflow"):
+    engine = WorkflowEngine(workflow)
+    engine.set_context("input", user_input)
+
+    results = engine.run_workflow("trading_pipeline")
+
+    st.subheader("Workflow Results:")
+    for r in results:
+        if isinstance(r, dict) and "stage" in r and "output" in r:
+            st.write(f"Stage: {r['stage']} → Output: {r['output']}")
+        else:
+            st.write(r)

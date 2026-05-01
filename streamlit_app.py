@@ -268,3 +268,48 @@ def analytics_tab():
         file_name="trading_history.csv",
         mime="text/csv",
     )
+
+# --- Model Registry Tab ---
+import os
+import pickle
+
+def model_registry_tab():
+    st.header("Model Registry")
+
+    # Initialize registry in session state
+    if "models" not in st.session_state:
+        st.session_state["models"] = {}
+
+    # Upload new model
+    uploaded_file = st.file_uploader("Upload ML Model (.pkl)", type=["pkl"])
+    if uploaded_file is not None:
+        try:
+            model = pickle.load(uploaded_file)
+            st.session_state["models"][uploaded_file.name] = model
+            st.success(f"Model '{uploaded_file.name}' added to registry")
+        except Exception as e:
+            st.error(f"Failed to load model: {e}")
+
+    # List registered models
+    if st.session_state["models"]:
+        st.subheader("Registered Models")
+        for name in st.session_state["models"].keys():
+            st.write(f"- {name}")
+
+        # Select active model
+        active_model = st.selectbox("Select Active Model", list(st.session_state["models"].keys()))
+        st.session_state["active_model"] = active_model
+        st.info(f"Active model: {active_model}")
+
+        # Test model on sample data
+        if st.button("Test Active Model"):
+            model = st.session_state["models"][active_model]
+            try:
+                # Example: assume model has predict method
+                sample = [[100]]  # placeholder input
+                prediction = model.predict(sample)
+                st.write("Sample prediction:", prediction)
+            except Exception as e:
+                st.error(f"Model test failed: {e}")
+    else:
+        st.warning("No models registered yet. Upload a .pkl file to begin.")

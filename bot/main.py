@@ -2,7 +2,10 @@ import logging
 import sai
 from datetime import datetime
 
-class TradingBot:
+from core.engine import WorkflowEngine
+import json
+
+class Sai:
     def __init__(self, risk=0.5):
         self.risk = risk
         self.trades = []

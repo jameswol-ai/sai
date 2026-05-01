@@ -27,6 +27,9 @@ def stop_trading():
     st.session_state["running"] = False
 
 # --- Dashboard Tab ---
+# --- Dashboard Tab ---
+import pandas as pd
+
 def dashboard_tab():
     st.header("Dashboard")
     col1, col2 = st.columns(2)
@@ -42,6 +45,23 @@ def dashboard_tab():
         st.metric("Balance", result["balance"])
         st.write("Positions:", result["positions"])
 
+    # --- CSV Export ---
+    if "history" not in st.session_state:
+        st.session_state["history"] = []
+
+    if result:
+        st.session_state["history"].append(result)
+
+    if st.button("Export Trading History to CSV"):
+        df = pd.DataFrame(st.session_state["history"])
+        csv = df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="Download CSV",
+            data=csv,
+            file_name="trading_history.csv",
+            mime="text/csv",
+        )
+        
 # --- Strategy Config Tab ---
 def strategy_config_tab():
     st.header("Strategy Config")

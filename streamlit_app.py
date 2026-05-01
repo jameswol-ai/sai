@@ -1,19 +1,96 @@
 # sai/streamlit_app.py
 
 import streamlit as st
+import threading
+import time
 from sai.core.engine import WorkflowEngine
 
+engine = WorkflowEngine()
+
+# --- Live Trading Loop ---
+def trading_loop():
+    while st.session_state.get("running", False):
+        result = engine.run()
+        st.session_state["last_result"] = result
+        time.sleep(2)  # adjust frequency
+
+def start_trading():
+    if not st.session_state.get("running", False):
+        st.session_state["running"] = True
+        thread = threading.Thread(target=trading_loop, daemon=True)
+        thread.start()
+
+def stop_trading():
+    st.session_state["running"] = False
+
+# --- Dashboard Tab ---
+def dashboard_tab():
+    st.header("Dashboard")
+
+    col1, col2 = st.columns(2)
+    if col1.button("Start Live Trading"):
+        start_trading()
+    if col2.button("Stop Live Trading"):
+        stop_trading()
+
+    result = st.session_state.get("last_result")
+    if result:
+        st.metric("Decision", result["decision"])
+        st.metric("Price", result["price"])
+        st.metric("Balance", result["balance"])
+        st.write("Positions:", result["positions"])
+
+# --- Strategy Config Tab ---
+def strategy_config_tab():
+    st.header("Strategy Config")
+    buy_threshold = st.number_input("Buy threshold", value=100.0)
+    sell_threshold = st.number_input("Sell threshold", value=105.0)
+    st.write("Configured thresholds:", buy_threshold, sell_threshold)
+    # Later: feed into engine.decide()
+
+# --- Logs Tab ---
+def logs_tab():
+    st.header("Logs")
+    try:
+        with open("workflow.log", "r") as f:
+            logs = f.read()
+        st.text_area("Workflow Logs", logs, height=300)
+    except FileNotFoundError:
+        st.warning("No logs yet. Run the workflow first.")
+
+# --- Model Testing Tab ---
+def model_testing_tab():
+    st.header("Model Testing")
+    st.write("Placeholder for ML model evaluation")
+
+# --- Debug Tab ---
+def debug_tab():
+    st.header("Debug")
+    st.json({
+        "balance": engine.balance,
+        "positions": engine.positions,
+    })
+
+# --- Main App ---
 def main():
-    st.title("SAI Trading Bot Dashboard")
+    st.title("SAI Trading Bot")
+    if "running" not in st.session_state:
+        st.session_state["running"] = False
+    if "last_result" not in st.session_state:
+        st.session_state["last_result"] = None
 
-    engine = WorkflowEngine()
-
-    st.header("Run Workflow")
-    user_input = st.text_input("Enter data for workflow:")
-
-    if st.button("Run"):
-        result = engine.run(user_input)
-        st.write("Result:", result)
+    tab = st.sidebar.radio("Navigation", 
+                           ["Dashboard", "Strategy Config", "Logs", "Model Testing", "Debug"])
+    if tab == "Dashboard":
+        dashboard_tab()
+    elif tab == "Strategy Config":
+        strategy_config_tab()
+    elif tab == "Logs":
+        logs_tab()
+    elif tab == "Model Testing":
+        model_testing_tab()
+    elif tab == "Debug":
+        debug_tab()
 
 if __name__ == "__main__":
     main()

@@ -4,6 +4,7 @@ import time
 import logging
 import sys
 import os
+from sai.bot.main import TradingBot
 
 # Ensure parent directory is on sys.path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))

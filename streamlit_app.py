@@ -28,6 +28,7 @@ def stop_trading():
 
 # --- Dashboard Tab ---
 import pandas as pd
+import matplotlib.pyplot as plt
 
 def dashboard_tab():
     st.header("Dashboard")
@@ -66,11 +67,39 @@ def dashboard_tab():
         col1.metric("Total Trades", total_trades)
         col2.metric("Buys / Sells / Holds", f"{buys}/{sells}/{holds}")
         col3.metric("Win Rate", f"{win_rate:.2%}")
-
         st.metric("Average Price", f"{avg_price:.2f}")
 
+        # --- Plots ---
+        st.subheader("Performance Charts")
+
+        # Price over time
+        fig, ax = plt.subplots()
+        ax.plot(df.index, df["price"], marker="o", label="Price")
+        ax.set_title("Price Over Time")
+        ax.set_xlabel("Trade #")
+        ax.set_ylabel("Price")
+        ax.legend()
+        st.pyplot(fig)
+
+        # Balance curve
+        fig2, ax2 = plt.subplots()
+        ax2.plot(df.index, df["balance"], marker="o", color="green", label="Balance")
+        ax2.set_title("Balance Curve")
+        ax2.set_xlabel("Trade #")
+        ax2.set_ylabel("Balance")
+        ax2.legend()
+        st.pyplot(fig2)
+
     # --- CSV Export ---
-        
+    if st.session_state["history"]:
+        df = pd.DataFrame(st.session_state["history"])
+        csv = df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="Download Trading History CSV",
+            data=csv,
+            file_name="trading_history.csv",
+            mime="text/csv",
+        )
 # --- Strategy Config Tab ---
 def strategy_config_tab():
     st.header("Strategy Config")

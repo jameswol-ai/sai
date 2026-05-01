@@ -41,11 +41,21 @@ def trading_loop():
 tabs = st.tabs(["📊 Dashboard", "⚙️ Strategy Config", "📝 Logs", "🧪 Model Testing", "🐞 Debug"])
 
 # --- Dashboard ---
+
+st.metric("Last Prediction", prediction)
+
 with tabs[0]:
     st.header("Live Trading Dashboard")
     if st.button("Start Trading", disabled=st.session_state.running):
         st.session_state.running = True
         threading.Thread(target=trading_loop, daemon=True).start()
+
+    import pickle
+
+# Load trained model once at startup
+if "model" not in st.session_state:
+    with open("models/model.pkl", "rb") as f:
+        st.session_state.model = pickle.load(f)
     if st.button("Stop Trading", disabled=not st.session_state.running):
         st.session_state.running = False
 
@@ -84,3 +94,25 @@ with tabs[3]:
 with tabs[4]:
     st.header("Debug Tools")
     st.write("Session State:", st.session_state)
+
+def trading_loop():
+    while st.session_state.running:
+        # Example: get latest market features
+        features = get_latest_features()  # returns DataFrame row
+
+        # Predict action
+        prediction = st.session_state.model.predict(features)[0]
+
+        if prediction == 1:  # Buy signal
+            execute_trade("BUY", features)
+            logging.info("Executed BUY trade")
+        elif prediction == -1:  # Sell signal
+            execute_trade("SELL", features)
+            logging.info("Executed SELL trade")
+        else:
+            logging.info("Hold position")
+
+        # Update charts/metrics
+        update_dashboard()
+        time.sleep(5)  # loop interval
+

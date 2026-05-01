@@ -2,12 +2,9 @@
 
 class WorkflowEngine:
     def __init__(self):
-        self.counter = 0
+        # initialize engine state
+        pass
 
-    def run(self, data: dict):
-        self.counter += 1
-        return {
-            "status": "ok",
-            "runs": self.counter,
-            "input": data
-        }
+    def run(self, data):
+        print("Running workflow with:", data)
+        return {"status": "ok", "data": data}

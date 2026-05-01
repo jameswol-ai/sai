@@ -1,5 +1,2 @@
-# sai/__init__.py
-
-sai/__init__.py
-sai/core/__init__.py
-sai/bot/__init__.py
+# Marks 'sai' as a package
+# You can also define top-level exports here if needed

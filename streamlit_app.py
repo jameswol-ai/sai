@@ -1,4 +1,3 @@
-# sai/streamlit_app.py
 import streamlit as st
 import threading
 import time
@@ -6,11 +5,11 @@ import logging
 import sys
 import os
 
-# Ensure the parent directory is on sys.path
+# Ensure parent directory is on sys.path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # ✅ Correct import
-from sai.bot.main import run_bot, get_data, decide_action, SimpleModel
+from sai.bot.main import TradingBot
 
 # Configure logging
 logging.basicConfig(
@@ -24,10 +23,12 @@ if "bot" not in st.session_state:
     st.session_state.bot = TradingBot()
 if "trades" not in st.session_state:
     st.session_state.trades = []
+if "running" not in st.session_state:
+    st.session_state.running = False
 
 # Background trading loop
 def trading_loop():
-    while st.session_state.get("running", False):
+    while st.session_state.running:
         price = int(time.time()) % 100  # dummy price
         action = st.session_state.bot.decide(price)
         trade = {"price": price, "action": action}
@@ -39,7 +40,7 @@ def trading_loop():
 st.title("SAI Trading Bot Dashboard")
 
 if st.button("Start Trading"):
-    if not st.session_state.get("running", False):
+    if not st.session_state.running:
         st.session_state.running = True
         threading.Thread(target=trading_loop, daemon=True).start()
 
@@ -50,5 +51,8 @@ st.subheader("Live Trades")
 st.write(st.session_state.trades)
 
 st.subheader("Logs")
-with open("trading.log", "r") as f:
-    st.text(f.read())
+try:
+    with open("trading.log", "r") as f:
+        st.text(f.read())
+except FileNotFoundError:
+    st.info("No logs yet.")

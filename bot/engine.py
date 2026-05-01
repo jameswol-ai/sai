@@ -2,13 +2,12 @@
 
 class WorkflowEngine:
     def __init__(self):
-        # Initialize any state here
         self.counter = 0
 
     def run(self, data: dict):
         """
-        Minimal stub for workflow execution.
-        Replace with your trading logic later.
+        Minimal workflow execution stub.
+        Replace with trading workflow logic later.
         """
         self.counter += 1
         return {

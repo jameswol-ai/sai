@@ -2,8 +2,6 @@
 
 import streamlit as st
 import random
-import json
-import time
 import logging
 
 # =========================================================
@@ -22,10 +20,14 @@ logging.basicConfig(
 # SESSION STATE
 # ---------------------------
 def init_state():
-    st.session_state.setdefault("designs", [])
-    st.session_state.setdefault("current_design", None)
-    st.session_state.setdefault("climate_mode", "Hot & Dry")
-    st.session_state.setdefault("floors", 1)
+    if "designs" not in st.session_state:
+        st.session_state["designs"] = []
+    if "current_design" not in st.session_state:
+        st.session_state["current_design"] = None
+    if "climate_mode" not in st.session_state:
+        st.session_state["climate_mode"] = "Hot & Dry"
+    if "floors" not in st.session_state:
+        st.session_state["floors"] = 1
 
 init_state()
 
@@ -105,10 +107,7 @@ with tab_design:
     if st.button("Generate Design"):
         floor_plan = engine.generate_floor_plan(floors, building_type)
 
-        if structure_mode == "Multi Store":
-            config = engine.multi_store_config()
-        else:
-            config = engine.single_store_config()
+        config = engine.multi_store_config() if structure_mode == "Multi Store" else engine.single_store_config()
 
         design = {
             "type": building_type,
@@ -134,7 +133,6 @@ with tab_design:
 with tab_codes:
     st.header("South Sudan Adaptive Building Codes (AI Generated)")
     st.json(engine.building_code_profile())
-
     st.info("These are adaptive AI guidelines for hot climates, flood-prone zones, and mixed urban-rural environments.")
 
 # =========================================================
@@ -152,8 +150,12 @@ with tab_sim:
         st.subheader("Performance Metrics")
         st.json(result)
 
-        st.progress(int(result["temperature_resilience"].replace("%", "")) / 100)
-        st.progress(int(result["ventilation_efficiency"].replace("%", "")) / 100)
+        # Convert percentages safely to float between 0 and 1
+        temp_res = int(result["temperature_resilience"].replace("%", "")) / 100.0
+        vent_eff = int(result["ventilation_efficiency"].replace("%", "")) / 100.0
+
+        st.progress(temp_res)
+        st.progress(vent_eff)
 
     else:
         st.warning("Generate a design first to simulate performance.")

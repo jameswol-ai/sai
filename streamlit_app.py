@@ -3,7 +3,9 @@ import streamlit as st
 import time
 import threading
 import logging
-from sai.bot.main import TradingBot   # ✅ fixed import
+
+# ✅ Correct import path
+from sai.bot.main import TradingBot
 
 # Configure logging
 logging.basicConfig(
@@ -12,48 +14,42 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-# Initialize bot in session state
+# Initialize session state
 if "bot" not in st.session_state:
-    st.session_state.bot = TradingBot(risk=0.5)
-
+    st.session_state.bot = TradingBot()
 if "trades" not in st.session_state:
     st.session_state.trades = []
+if "running" not in st.session_state:
+    st.session_state.running = False
 
-# Dashboard tab
-def dashboard():
-    st.title("SAI Trading Bot Dashboard")
-    st.write("Live trading loop with dummy data")
+# Background trading loop
+def trading_loop():
+    while st.session_state.running:
+        price = time.time() % 100  # dummy price
+        action = st.session_state.bot.decide(price)
+        trade = {"price": price, "action": action}
+        st.session_state.trades.append(trade)
+        logging.info(f"Trade executed: {trade}")
+        time.sleep(2)
 
-    placeholder = st.empty()
+# Streamlit UI
+st.title("SAI Trading Bot Dashboard")
 
-    def run_loop():
-        for price in range(100, 110):
-            action = st.session_state.bot.decide(price)
-            trade = {"price": price, "action": action}
-            st.session_state.trades.append(trade)
-            logging.info(f"Trade executed: {trade}")
-            placeholder.write(trade)
-            time.sleep(1)
+if st.button("Start Trading"):
+    if not st.session_state.running:
+        st.session_state.running = True
+        threading.Thread(target=trading_loop, daemon=True).start()
+        st.success("Trading started!")
 
-    if st.button("Start Trading"):
-        threading.Thread(target=run_loop, daemon=True).start()
+if st.button("Stop Trading"):
+    st.session_state.running = False
+    st.warning("Trading stopped.")
 
-    st.subheader("Trade History")
-    st.write(st.session_state.trades)
+st.subheader("Live Trades")
+for trade in st.session_state.trades[-10:]:
+    st.write(trade)
 
-# Logs tab
-def logs():
-    st.title("Logs")
-    try:
-        with open("trading.log") as f:
-            st.text(f.read())
-    except FileNotFoundError:
-        st.write("No logs yet.")
-
-# Sidebar navigation
-tab = st.sidebar.radio("Navigation", ["Dashboard", "Logs"])
-
-if tab == "Dashboard":
-    dashboard()
-elif tab == "Logs":
-    logs()
+st.subheader("Logs")
+with open("trading.log", "r") as f:
+    logs = f.readlines()
+st.text("".join(logs[-10:]))

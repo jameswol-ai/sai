@@ -1,60 +1,44 @@
-# sai/streamlit_app.py
-
-import os
 import streamlit as st
-
+import logging
 from sai.core.engine import WorkflowEngine
-from sai.stages.sample_stages import (
-    ingest_stage,
-    analysis_stage,
-    decision_stage,
-    execution_stage,
+from sai.bot.main import run_bot
+
+# Configure logging
+logging.basicConfig(
+    filename="app.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-# Registry file path
-REGISTRY_FILE = "sai/models/registry.json"
+# Initialize engine once
+if "engine" not in st.session_state:
+    st.session_state.engine = WorkflowEngine()
 
-def ensure_registry_file():
-    """Ensure the model registry file exists."""
-    if not os.path.exists(REGISTRY_FILE):
-        with open(REGISTRY_FILE, "w") as f:
-            f.write("{}")
+st.title("SAI Trading Bot Dashboard")
 
-def load_registry():
-    """Load the model registry JSON as a string."""
-    ensure_registry_file()
-    with open(REGISTRY_FILE, "r") as f:
-        return f.read()
+tab_dashboard, tab_strategy, tab_logs = st.tabs(["Dashboard", "Strategy Config", "Logs"])
 
-def save_registry(content: str):
-    """Save content back to the registry file."""
-    with open(REGISTRY_FILE, "w") as f:
-        f.write(content)
+with tab_dashboard:
+    st.header("Live Trading")
+    if st.button("Run Workflow"):
+        result = st.session_state.engine.run({"sample": "data"})
+        st.write("Workflow result:", result)
+        logging.info("Workflow run: %s", result)
 
-# Define workflow
-workflow = {
-    "trading_pipeline": [
-        {"name": "ingest", "function": ingest_stage},
-        {"name": "analysis", "function": analysis_stage},
-        {"name": "decision", "function": decision_stage},
-        {"name": "execution", "function": execution_stage},
-    ]
-}
+    if st.button("Run Bot"):
+        output = run_bot()
+        st.write("Bot output:", output)
+        logging.info("Bot run: %s", output)
 
-# Streamlit UI
-st.title("📈 SAI Trading Bot Workflow")
+with tab_strategy:
+    st.header("Strategy Configuration")
+    st.text_input("Parameter A", key="param_a")
+    st.text_input("Parameter B", key="param_b")
 
-user_input = st.text_input("Enter market symbol or dataset path:")
-
-if st.button("Run Trading Workflow"):
-    engine = WorkflowEngine(workflow)
-    engine.set_context("input", user_input)
-
-    results = engine.run_workflow("trading_pipeline")
-
-    st.subheader("Workflow Results:")
-    for r in results:
-        if isinstance(r, dict) and "stage" in r and "output" in r:
-            st.write(f"Stage: {r['stage']} → Output: {r['output']}")
-        else:
-            st.write(r)
+with tab_logs:
+    st.header("Logs")
+    try:
+        with open("app.log") as f:
+            st.text(f.read())
+    except FileNotFoundError:
+        st.write("No logs yet.")

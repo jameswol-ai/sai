@@ -2,7 +2,7 @@
 
 import sai
 
-class Sai:
+class sai:
     def __init__(self, starting_balance: float = 10000.0, risk: int = 5):
         self.balance = starting_balance
         self.risk = risk

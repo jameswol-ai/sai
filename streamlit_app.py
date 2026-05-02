@@ -2,16 +2,14 @@ import streamlit as st
 import threading
 import time
 import logging
-from sai.core.engine import Sai   # now correctly imports the class
+from sai.core.engine import Sai   # imports your own class
 
-# Configure logging
 logging.basicConfig(
     filename="sai_app.log",
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
-# Initialize session state safely
 if "bot" not in st.session_state:
     st.session_state.bot = Sai()
 if "running" not in st.session_state:

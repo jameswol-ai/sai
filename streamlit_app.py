@@ -209,16 +209,4 @@ def analytics_tab():
     st.pyplot(fig2)
 
     csv = df.to_csv(index=False).encode("utf-8")
-    st.download_button("Download Trading History CSV", csv, "trading_history.csv", "text/csv")
-
-# --- Model Registry Tab ---
-def model_registry_tab():
-    st.header("Model Registry")
-    if "models" not in st.session_state:
-        st.session_state["models"] = {}
-    uploaded_file = st.file_uploader("Upload ML Model (.pkl)", type=["pkl"])
-    if uploaded_file is not None:
-        try:
-            model = pickle.load(uploaded_file)
-            st.session_state["models"][uploaded_file.name] = model
-            st.success(f"Model '{uploaded_file.name}' added
+    st.download_button("Download Trading History CSV",

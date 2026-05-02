@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import pickle
 import random
 import logging
-import binance.yaml
+import yaml   # <-- FIXED: use PyYAML
 from binance.client import Client
 
 # --- Logging Setup ---
@@ -41,6 +41,7 @@ def get_live_price(symbol="BTCUSDT"):
             logging.error(f"Binance price feed error: {e}")
             st.warning(f"Could not fetch live price for {symbol}, using fallback.")
     return round(random.uniform(95, 110), 2)  # fallback
+
 # --- Trade Generator with ML Integration ---
 def generate_trade():
     symbol = st.session_state.get("symbol", "BTCUSDT")
@@ -104,7 +105,6 @@ def dashboard_tab():
     client = init_binance()
     if client:
         try:
-            # simple ping to Binance
             client.ping()
             st.success("✅ Binance connection active")
         except Exception as e:
@@ -221,83 +221,4 @@ def model_registry_tab():
         try:
             model = pickle.load(uploaded_file)
             st.session_state["models"][uploaded_file.name] = model
-            st.success(f"Model '{uploaded_file.name}' added to registry")
-        except Exception as e:
-            st.error(f"Failed to load model: {e}")
-    if st.session_state["models"]:
-        active_model = st.selectbox("Select Active Model", list(st.session_state["models"].keys()))
-        st.session_state["active_model"] = active_model
-        st.info(f"Active model: {active_model}")
-
-# --- Main App ---
-def main():
-    st.title("SAI Trading Bot (Binance Live AI)")
-    if "running" not in st.session_state:
-        st.session_state["running"] = False
-    if "last_result" not in st.session_state:
-        st.session_state["last_result"] = None
-    if "balance" not in st.session_state:
-        st.session_state["balance"] = 10000.0
-    if "positions" not in st.session_state:
-        st.session_state["positions"] = []
-    if "symbol" not in st.session_state:
-        st.session_state["symbol"] = "BTCUSDT"
-
-    tab = st.sidebar.radio("Navigation",
-        ["Dashboard", "Strategy Config", "Logs", "Model Testing", "Debug", "Analytics", "Model Registry"])
-
-    if tab == "Dashboard":
-        dashboard_tab()
-    elif tab == "Strategy Config":
-        strategy_config_tab()
-    elif tab == "Logs":
-        logs_tab()
-    elif tab == "Model Testing":
-        model_testing_tab()
-    elif tab == "Debug":
-        debug_tab()
-    elif tab == "Analytics":
-        analytics_tab()
-    elif tab == "Model Registry":
-        model_registry_tab()
-
-if __name__ == "__main__":
-    main()
-
-def main():
-    st.title("SAI Trading Bot (Binance Live AI)")
-    if "running" not in st.session_state:
-        st.session_state["running"] = False
-    if "last_result" not in st.session_state:
-        st.session_state["last_result"] = None
-    if "balance" not in st.session_state:
-        st.session_state["balance"] = 10000.0
-    if "positions" not in st.session_state:
-        st.session_state["positions"] = []
-    if "symbol" not in st.session_state:
-        st.session_state["symbol"] = "BTCUSDT"
-
-    tab = st.sidebar.radio("Navigation",
-        ["Dashboard", "Strategy Config", "Logs", "Model Testing", "Debug", "Analytics", "Model Registry"])
-
-    try:
-        if tab == "Dashboard":
-            dashboard_tab()
-        elif tab == "Strategy Config":
-            strategy_config_tab()
-        elif tab == "Logs":
-            logs_tab()
-        elif tab == "Model Testing":
-            model_testing_tab()
-        elif tab == "Debug":
-            debug_tab()
-        elif tab == "Analytics":
-            analytics_tab()
-        elif tab == "Model Registry":
-            model_registry_tab()
-    except Exception as e:
-        logging.error(f"Error in tab {tab}: {e}")
-        st.error(f"An error occurred while loading {tab}. Check logs for details.")
-
-if __name__ == "__main__":
-    main()
+            st.success(f"Model '{uploaded_file.name}' added

@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 import pickle
 import random
 import logging
-from sai.configs.binance import binance
+import yaml
+from binance.client import Client
 
 # --- Logging Setup ---
 logging.basicConfig(filename="workflow.log", level=logging.INFO,
@@ -14,17 +15,22 @@ logging.basicConfig(filename="workflow.log", level=logging.INFO,
 
 # --- Binance Client Setup ---
 def init_binance():
-    api_key = st.session_state.get("binance_api_key", "")
-    api_secret = st.session_state.get("binance_api_secret", "")
-    if api_key and api_secret:
-        return sai.configs.binance(api_key, api_secret)
+    try:
+        with open("sai/configs/binance.yaml", "r") as f:
+            cfg = yaml.safe_load(f)
+        api_key = cfg.get("api_key", "")
+        api_secret = cfg.get("api_secret", "")
+        if api_key and api_secret:
+            return Client(api_key, api_secret)
+    except Exception as e:
+        logging.error(f"Failed to load Binance config: {e}")
     return None
 
 def get_live_price(symbol="BTCUSDT"):
     client = init_binance()
     if client:
         try:
-            ticker = sai.configs.binance.get_symbol_ticker(symbol=symbol)
+            ticker = client.get_symbol_ticker(symbol=symbol)
             return float(ticker["price"])
         except Exception as e:
             logging.error(f"Binance price feed error: {e}")
@@ -106,14 +112,10 @@ def strategy_config_tab():
     buy_threshold = st.number_input("Buy threshold", value=100.0)
     sell_threshold = st.number_input("Sell threshold", value=105.0)
     symbol = st.text_input("Trading Symbol (e.g. BTCUSDT)", value=st.session_state.get("symbol", "BTCUSDT"))
-    api_key = st.text_input("Binance API Key", type="password")
-    api_secret = st.text_input("Binance API Secret", type="password")
     if st.button("Update Strategy"):
         st.session_state["buy_threshold"] = buy_threshold
         st.session_state["sell_threshold"] = sell_threshold
         st.session_state["symbol"] = symbol
-        st.session_state["binance_api_key"] = api_key
-        st.session_state["binance_api_secret"] = api_secret
         st.success(f"Updated: BUY<{buy_threshold}, SELL>{sell_threshold}, Symbol={symbol}")
 
 # --- Logs Tab ---
@@ -218,3 +220,5 @@ def main():
         st.session_state["balance"] = 10000.0
     if "positions" not in st.session_state:
         st.session_state["positions"] = []
+    if "symbol" not in st.session_state:
+        st.session_state["symbol

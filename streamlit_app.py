@@ -2,7 +2,7 @@ import streamlit as st
 import threading
 import time
 import logging
-from sai.core.engine import Sai   # make sure sai/core/engine.py defines TradingBot
+from sai.core.engine import sai   # make sure sai/core/engine.py defines TradingBot
 
 # Configure logging
 logging.basicConfig(

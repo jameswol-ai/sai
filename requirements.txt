@@ -11,3 +11,4 @@ scikit-learn>=1.4
 grafanalib>=0.7
 
 pyyaml
+python-binance

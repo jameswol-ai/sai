@@ -1,26 +1,14 @@
-# sai/core/engine.py
-# Dummy trading logic engine (WorkflowEngine excluded)
+from datetime import datetime
 
-import random
+class TradingEngine:
+    def __init__(self):
+        self.trades = []
 
-def run_trade(balance=10000.0, positions=None):
-    if positions is None:
-        positions = []
+    def record_trade(self, trade):
+        self.trades.append(trade)
 
-    decision = random.choice(["BUY", "SELL", "HOLD"])
-    price = round(random.uniform(95, 110), 2)
+    def current_time(self):
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    if decision == "BUY":
-        balance -= price
-        positions.append(price)
-    elif decision == "SELL" and positions:
-        positions.pop()
-        balance += price
-    # HOLD does nothing
-
-    return {
-        "decision": decision,
-        "price": price,
-        "balance": balance,
-        "positions": positions.copy()
-    }
+    def __str__(self):
+        return f"TradingEngine(trades={len(self.trades)})"

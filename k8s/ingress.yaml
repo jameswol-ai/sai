@@ -9,7 +9,7 @@ metadata:
     cert-manager.io/cluster-issuer: letsencrypt-prod   # assumes cert-manager is installed
 spec:
   rules:
-    - host: sai-bot.example.com   # replace with your domain
+    - host: ai-sai@streamlit.com   # replace with your domain
       http:
         paths:
           - path: /

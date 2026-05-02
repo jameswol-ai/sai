@@ -99,11 +99,26 @@ def stop_trading():
 # --- Dashboard Tab ---
 def dashboard_tab():
     st.header("Dashboard")
+
+    # Connection status check
+    client = init_binance()
+    if client:
+        try:
+            # simple ping to Binance
+            client.ping()
+            st.success("✅ Binance connection active")
+        except Exception as e:
+            logging.error(f"Binance ping failed: {e}")
+            st.error("❌ Binance connection failed")
+    else:
+        st.warning("⚠️ Binance client not initialized (check API keys/config)")
+
     col1, col2 = st.columns(2)
     if col1.button("Start Live Trading"):
         start_trading()
     if col2.button("Stop Live Trading"):
         stop_trading()
+
     result = st.session_state.get("last_result")
     if result:
         st.metric("Decision", result["decision"])

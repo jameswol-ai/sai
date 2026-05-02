@@ -1,15 +1,23 @@
 # sai/core/engine.py
 
-import sai
+import random
 
-class sai:
+class Sai:
+    """
+    Minimal trading bot stub for Streamlit integration.
+    """
+
     def __init__(self, starting_balance: float = 10000.0, risk: int = 5):
         self.balance = starting_balance
         self.risk = risk
         self.open_trades = []
 
     def run_once(self):
-        if random.random() < 0.3:
+        """
+        Simulates one trading step.
+        Returns a string log entry if a trade occurs.
+        """
+        if random.random() < 0.3:  # 30% chance of trade
             trade = {
                 "id": len(self.open_trades) + 1,
                 "amount": round(random.uniform(100, 500), 2),

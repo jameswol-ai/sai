@@ -9,9 +9,9 @@ import logging
 
 # --- Try importing yaml safely ---
 try:
-    import bianance.yaml
+    import binance.yaml
 
-from binance.client import Client
+from binance.client import binance.yaml
 
 # --- Logging Setup ---
 logging.basicConfig(filename="workflow.log", level=logging.INFO,

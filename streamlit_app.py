@@ -1,6 +1,4 @@
-Here’s a clean, corrected version of your streamlit_app.py with all the syntax errors fixed and the structure polished so it runs smoothly:
 
-`python
 import streamlit as st
 import threading
 import time

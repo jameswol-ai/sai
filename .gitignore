@@ -30,3 +30,5 @@ Thumbs.db
 # Ignore Docker artifacts
 *.pid
 *.sock
+
+sai/configs/binance.yaml

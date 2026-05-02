@@ -1,4 +1,3 @@
-
 import streamlit as st
 import threading
 import time
@@ -7,22 +6,32 @@ import matplotlib.pyplot as plt
 import pickle
 import random
 import logging
-import yaml
+
+# --- Try importing yaml safely ---
+try:
+    import yaml
+except ImportError:
+    yaml = None
+    logging.warning("PyYAML not installed. Binance config loading will be disabled.")
+
 from binance.client import Client
 
-#--- Logging Setup ---
+# --- Logging Setup ---
 logging.basicConfig(filename="workflow.log", level=logging.INFO,
                     format="%(asctime)s - %(levelname)s - %(message)s")
 
-#--- Binance Client Setup ---
+# --- Binance Client Setup ---
 def init_binance():
+    if yaml is None:
+        st.warning("PyYAML not installed. Cannot load Binance configuration.")
+        return None
     try:
         with open("sai/configs/binance.yaml", "r") as f:
             cfg = yaml.safe_load(f)
-        apikey = cfg.get("apikey", "")
-        apisecret = cfg.get("apisecret", "")
-        if apikey and apisecret:
-            return Client(apikey, apisecret)
+        api_key = cfg.get("api_key", "")
+        api_secret = cfg.get("api_secret", "")
+        if api_key and api_secret:
+            return Client(api_key, api_secret)
         else:
             st.warning("Binance API keys missing in configs/binance.yaml")
     except FileNotFoundError:
@@ -32,27 +41,27 @@ def init_binance():
         st.warning("Error loading Binance configuration.")
     return None
 
-def getliveprice(symbol="BTCUSDT"):
+def get_live_price(symbol="BTCUSDT"):
     client = init_binance()
     if client:
         try:
-            ticker = client.getsymbolticker(symbol=symbol)
+            ticker = client.get_symbol_ticker(symbol=symbol)
             return float(ticker["price"])
         except Exception as e:
             logging.error(f"Binance price feed error: {e}")
             st.warning(f"Could not fetch live price for {symbol}, using fallback.")
     return round(random.uniform(95, 110), 2)
 
-#--- Trade Generator ---
+# --- Trade Generator ---
 def generate_trade():
     symbol = st.session_state.get("symbol", "BTCUSDT")
-    price = getliveprice(symbol)
+    price = get_live_price(symbol)
     balance = st.session_state.get("balance", 10000.0)
     positions = st.session_state.get("positions", [])
 
-    activemodelname = st.sessionstate.get("activemodel")
-    if activemodelname:
-        model = st.sessionstate["models"][activemodel_name]
+    active_model_name = st.session_state.get("active_model")
+    if active_model_name:
+        model = st.session_state["models"][active_model_name]
         try:
             decision = model.predict([[price]])[0]
         except Exception as e:
@@ -61,8 +70,8 @@ def generate_trade():
     else:
         decision = random.choice(["BUY", "SELL", "HOLD"])
 
-    buythreshold = st.sessionstate.get("buy_threshold", 100.0)
-    sellthreshold = st.sessionstate.get("sell_threshold", 105.0)
+    buy_threshold = st.session_state.get("buy_threshold", 100.0)
+    sell_threshold = st.session_state.get("sell_threshold", 105.0)
 
     if decision == "BUY" and price < buy_threshold and balance >= price:
         balance -= price
@@ -79,11 +88,11 @@ def generate_trade():
     logging.info(f"Trade executed: {result}")
     return result
 
-#--- Live Trading Loop ---
+# --- Live Trading Loop ---
 def trading_loop():
     while st.session_state.get("running", False):
         result = generate_trade()
-        st.sessionstate["lastresult"] = result
+        st.session_state["last_result"] = result
         if "history" not in st.session_state:
             st.session_state["history"] = []
         st.session_state["history"].append(result)
@@ -98,7 +107,7 @@ def start_trading():
 def stop_trading():
     st.session_state["running"] = False
 
-#--- Dashboard Tab ---
+# --- Dashboard Tab ---
 def dashboard_tab():
     st.header("Dashboard")
     client = init_binance()
@@ -118,26 +127,26 @@ def dashboard_tab():
     if col2.button("Stop Live Trading"):
         stop_trading()
 
-    result = st.sessionstate.get("lastresult")
+    result = st.session_state.get("last_result")
     if result:
         st.metric("Decision", result["decision"])
         st.metric("Price", result["price"])
         st.metric("Balance", result["balance"])
         st.write("Positions:", result["positions"])
 
-#--- Strategy Config Tab ---
-def strategyconfigtab():
+# --- Strategy Config Tab ---
+def strategy_config_tab():
     st.header("Strategy Config")
-    buythreshold = st.numberinput("Buy threshold", value=100.0)
-    sellthreshold = st.numberinput("Sell threshold", value=105.0)
-    symbol = st.textinput("Trading Symbol", value=st.sessionstate.get("symbol", "BTCUSDT"))
+    buy_threshold = st.number_input("Buy threshold", value=100.0)
+    sell_threshold = st.number_input("Sell threshold", value=105.0)
+    symbol = st.text_input("Trading Symbol", value=st.session_state.get("symbol", "BTCUSDT"))
     if st.button("Update Strategy"):
-        st.sessionstate["buythreshold"] = buy_threshold
-        st.sessionstate["sellthreshold"] = sell_threshold
+        st.session_state["buy_threshold"] = buy_threshold
+        st.session_state["sell_threshold"] = sell_threshold
         st.session_state["symbol"] = symbol
-        st.success(f"Updated strategy: BUY<{buythreshold}, SELL>{sellthreshold}, Symbol={symbol}")
+        st.success(f"Updated strategy: BUY<{buy_threshold}, SELL>{sell_threshold}, Symbol={symbol}")
 
-#--- Logs Tab ---
+# --- Logs Tab ---
 def logs_tab():
     st.header("Logs")
     try:
@@ -147,13 +156,13 @@ def logs_tab():
     except FileNotFoundError:
         st.warning("No logs yet.")
 
-#--- Model Testing Tab ---
-def modeltestingtab():
+# --- Model Testing Tab ---
+def model_testing_tab():
     st.header("Model Testing")
-    if "activemodel" not in st.sessionstate:
+    if "active_model" not in st.session_state:
         st.warning("No active model selected.")
         return
-    model = st.sessionstate["models"][st.sessionstate["active_model"]]
+    model = st.session_state["models"][st.session_state["active_model"]]
     test_data = pd.DataFrame({"price": [95, 100, 105, 110]})
     try:
         predictions = model.predict(test_data)
@@ -161,22 +170,22 @@ def modeltestingtab():
     except Exception as e:
         st.error(f"Model testing failed: {e}")
 
-#--- Debug Tab ---
+# --- Debug Tab ---
 def debug_tab():
     st.header("Debug")
     st.json({
         "balance": st.session_state.get("balance", 10000.0),
         "positions": st.session_state.get("positions", []),
-        "buythreshold": st.sessionstate.get("buy_threshold", 100.0),
-        "sellthreshold": st.sessionstate.get("sell_threshold", 105.0),
-        "activemodel": st.sessionstate.get("active_model"),
+        "buy_threshold": st.session_state.get("buy_threshold", 100.0),
+        "sell_threshold": st.session_state.get("sell_threshold", 105.0),
+        "active_model": st.session_state.get("active_model"),
         "symbol": st.session_state.get("symbol", "BTCUSDT")
     })
 
-#--- Analytics Tab ---
+# --- Analytics Tab ---
 def analytics_tab():
     st.header("Analytics")
-    if "history" not in st.sessionstate or not st.sessionstate["history"]:
+    if "history" not in st.session_state or not st.session_state["history"]:
         st.warning("No trading history yet.")
         return
     df = pd.DataFrame(st.session_state["history"])
@@ -186,9 +195,9 @@ def analytics_tab():
     sells = (df["decision"] == "SELL").sum()
     holds = (df["decision"] == "HOLD").sum()
     avg_price = df["price"].mean()
-    winrate = sells / totaltrades if total_trades > 0 else 0
+    win_rate = sells / total_trades if total_trades > 0 else 0
     returns = df["balance"].pct_change().fillna(0)
-    sharpe = (returns.mean() / returns.std())  (252*0.5) if returns.std() > 0 else 0
+    sharpe = (returns.mean() / returns.std()) * (252**0.5) if returns.std() > 0 else 0
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Total Trades", total_trades)
@@ -211,32 +220,18 @@ def analytics_tab():
     st.download_button(
         label="Download Trading History CSV",
         data=csv,
-        filename="tradinghistory.csv",
+        file_name="trading_history.csv",
         mime="text/csv"
     )
 
-#--- Model Registry Tab ---
-def modelregistrytab():
+# --- Model Registry Tab ---
+def model_registry_tab():
     st.header("Model Registry")
     if "models" not in st.session_state:
         st.session_state["models"] = {}
-    uploadedfile = st.fileuploader("Upload ML Model (.pkl)", type=["pkl"])
+    uploaded_file = st.file_uploader("Upload ML Model (.pkl)", type=["pkl"])
     if uploaded_file is not None:
         try:
             model = pickle.load(uploaded_file)
-            st.sessionstate["models"][uploadedfile.name] = model
-            st.success(f"Model '{uploaded_file.name}' added successfully.")
-        except Exception as e:
-            st.error(f"Failed to load model: {e}")
-
-    if st.session_state["models"]:
-        st.subheader("Available Models")
-        for name in st.session_state["models"].keys():
-            if st.button(f"Activate {name}"):
-                st.sessionstate["activemodel"] = name
-                st.success(f"Activated model: {name}")
-
-#--- Main App ---
-def main():
-    st.title("Trading Bot Dashboard")
-    tabs = st.tabs
+            st.session_state["models"][uploaded_file.name] = model
+            st.success(f"Model '{uploaded_file

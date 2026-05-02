@@ -50,6 +50,7 @@ def generate_trade():
     positions = st.session_state.get("positions", [])
 
     active_model_name = st.session_state.get("active_model")
+    decision = random.choice(["BUY", "SELL", "HOLD"])
     if active_model_name and "models" in st.session_state:
         model = st.session_state["models"].get(active_model_name)
         if model:
@@ -57,11 +58,6 @@ def generate_trade():
                 decision = model.predict([[price]])[0]
             except Exception as e:
                 logging.error(f"Model prediction failed: {e}")
-                decision = random.choice(["BUY", "SELL", "HOLD"])
-        else:
-            decision = random.choice(["BUY", "SELL", "HOLD"])
-    else:
-        decision = random.choice(["BUY", "SELL", "HOLD"])
 
     buy_threshold = st.session_state.get("buy_threshold", 100.0)
     sell_threshold = st.session_state.get("sell_threshold", 105.0)
@@ -215,8 +211,6 @@ def analytics_tab():
 
 def model_registry_tab():
     st.header("Model Registry")
-def model_registry_tab():
-    st.header("Model Registry")
     if "models" not in st.session_state:
         st.session_state["models"] = {}
     uploaded_file = st.file_uploader("Upload ML Model (.pkl)", type=["pkl"])
@@ -234,34 +228,5 @@ def model_registry_tab():
             if st.button(f"Activate {name}"):
                 st.session_state["active_model"] = name
                 st.success(f"Activated model: {name}")
-              
-# --- Main App ---
-def main():
-    st.title("Trading Bot Dashboard")
-    tabs = st.tabs([
-        "📊 Dashboard",
-        "⚙️ Strategy Config",
-        "📝 Logs",
-        "🧪 Model Testing",
-        "🐞 Debug",
-        "📈 Analytics",
-        "📂 Model Registry"
-    ])
 
-    with tabs[0]:
-        dashboard_tab()
-    with tabs[1]:
-        strategy_config_tab()
-    with tabs[2]:
-        logs_tab()
-    with tabs[3]:
-        model_testing_tab()
-    with tabs[4]:
-        debug_tab()
-    with tabs[5]:
-        analytics_tab()
-    with tabs[6]:
-        model_registry_tab()
-
-if __name__ == "__main__":
-    main()
+# --- Main

@@ -137,7 +137,7 @@ def strategyconfigtab():
         st.session_state["symbol"] = symbol
         st.success(f"Updated strategy: BUY<{buythreshold}, SELL>{sellthreshold}, Symbol={symbol}")
 
---- Logs Tab ---
+#--- Logs Tab ---
 def logs_tab():
     st.header("Logs")
     try:
@@ -161,7 +161,7 @@ def modeltestingtab():
     except Exception as e:
         st.error(f"Model testing failed: {e}")
 
---- Debug Tab ---
+#--- Debug Tab ---
 def debug_tab():
     st.header("Debug")
     st.json({
@@ -173,7 +173,7 @@ def debug_tab():
         "symbol": st.session_state.get("symbol", "BTCUSDT")
     })
 
---- Analytics Tab ---
+#--- Analytics Tab ---
 def analytics_tab():
     st.header("Analytics")
     if "history" not in st.sessionstate or not st.sessionstate["history"]:

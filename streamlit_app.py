@@ -221,4 +221,25 @@ def main():
     if "positions" not in st.session_state:
         st.session_state["positions"] = []
     if "symbol" not in st.session_state:
-        st.session_state["symbol
+        st.session_state["symbol"] = "BTCUSDT"
+
+    tab = st.sidebar.radio("Navigation",
+        ["Dashboard", "Strategy Config", "Logs", "Model Testing", "Debug", "Analytics", "Model Registry"])
+
+    if tab == "Dashboard":
+        dashboard_tab()
+    elif tab == "Strategy Config":
+        strategy_config_tab()
+    elif tab == "Logs":
+        logs_tab()
+    elif tab == "Model Testing":
+        model_testing_tab()
+    elif tab == "Debug":
+        debug_tab()
+    elif tab == "Analytics":
+        analytics_tab()
+    elif tab == "Model Registry":
+        model_registry_tab()
+
+if __name__ == "__main__":
+    main()

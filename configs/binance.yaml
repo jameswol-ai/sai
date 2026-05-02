@@ -1,2 +1,7 @@
 api_key: yvXhKnIEIn5wRmGtWOlRziIWpVXZ73P1zgPWkT5KYBmWjRQfkyaa4Gzufx9pf1xT
 api_secret: PZXFx5NFQDPVt7PtSm5YBIZv9IHNSrkx91BuVqsZxfDPuW0GfFKr8FCHkcw7SSsO
+
+# Optional trading parameters
+base_asset: "BTC"
+quote_asset: "USDT"
+sandbox: false

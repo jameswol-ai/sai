@@ -1,4 +1,4 @@
-import streamlit as st
+9import streamlit as st
 import threading
 import time
 import pandas as pd
@@ -229,24 +229,44 @@ def model_registry_tab():
                 st.session_state["active_model"] = name
                 st.success(f"Activated model: {name}")
 
+import streamlit as st
 from prometheus_client import Gauge, start_http_server
 
-# --- Prometheus Metrics ---
-trade_price_gauge = Gauge("sai_trade_price", "Latest trade price")
-balance_gauge = Gauge("sai_balance", "Current account balance")
-positions_gauge = Gauge("sai_positions", "Number of open positions")
-decision_gauge = Gauge("sai_decision", "Decision encoded as BUY=1, SELL=2, HOLD=3")
+# --- Prometheus Metrics (guarded) ---
+if "metrics_initialized" not in st.session_state:
+    st.session_state["metrics_initialized"] = True
+
+    st.session_state["trade_price_gauge"] = Gauge("sai_trade_price", "Latest trade price")
+    st.session_state["balance_gauge"] = Gauge("sai_balance", "Current account balance")
+    st.session_state["positions_gauge"] = Gauge("sai_positions", "Number of open positions")
+    st.session_state["decision_gauge"] = Gauge("sai_decision", "Decision encoded as BUY=1, SELL=2, HOLD=3")
+    st.session_state["win_rate_gauge"] = Gauge("sai_win_rate", "Win rate of trades")
+    st.session_state["sharpe_ratio_gauge"] = Gauge("sai_sharpe_ratio", "Sharpe ratio of trading performance")
+
+    # Start Prometheus exporter only once
+    start_http_server(8000)
 
 def update_metrics(result):
-    trade_price_gauge.set(result["price"])
-    balance_gauge.set(result["balance"])
-    positions_gauge.set(len(result["positions"]))
+    st.session_state["trade_price_gauge"].set(result["price"])
+    st.session_state["balance_gauge"].set(result["balance"])
+    st.session_state["positions_gauge"].set(len(result["positions"]))
     if result["decision"] == "BUY":
-        decision_gauge.set(1)
+        st.session_state["decision_gauge"].set(1)
     elif result["decision"] == "SELL":
-        decision_gauge.set(2)
+        st.session_state["decision_gauge"].set(2)
     else:
-        decision_gauge.set(3)
+        st.session_state["decision_gauge"].set(3)
+
+    if "history" in st.session_state and st.session_state["history"]:
+        df = pd.DataFrame(st.session_state["history"])
+        total_trades = len(df)
+        sells = (df["decision"] == "SELL").sum()
+        win_rate = sells / total_trades if total_trades > 0 else 0
+        returns = df["balance"].pct_change().fillna(0)
+        sharpe = (returns.mean() / returns.std()) * (252**0.5) if returns.std() > 0 else 0
+
+        st.session_state["win_rate_gauge"].set(win_rate)
+        st.session_state["sharpe_ratio_gauge"].set(sharpe)
 
 # --- Main App ---
 def main():
@@ -277,6 +297,4 @@ def main():
         model_registry_tab()
 
 if __name__ == "__main__":
-    # Start Prometheus metrics server on port 8000
-    start_http_server(8000)
     main()

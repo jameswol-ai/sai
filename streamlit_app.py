@@ -2,7 +2,7 @@ import streamlit as st
 import threading
 import time
 import logging
-from sai.core.engine import sai   # make sure sai/core/engine.py defines TradingBot
+from sai.core.engine import Sai   # now correctly imports the class
 
 # Configure logging
 logging.basicConfig(
@@ -13,7 +13,7 @@ logging.basicConfig(
 
 # Initialize session state safely
 if "bot" not in st.session_state:
-    st.session_state.bot = TradingBot()
+    st.session_state.bot = Sai()
 if "running" not in st.session_state:
     st.session_state.running = False
 if "logs" not in st.session_state:

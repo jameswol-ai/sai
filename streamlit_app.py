@@ -101,7 +101,6 @@ def stop_trading():
 def dashboard_tab():
     st.header("Dashboard")
 
-    # Connection status check
     client = init_binance()
     if client:
         try:
@@ -209,4 +208,19 @@ def analytics_tab():
     st.pyplot(fig2)
 
     csv = df.to_csv(index=False).encode("utf-8")
-    st.download_button("Download Trading History CSV",
+    st.download_button(
+        label="Download Trading History CSV",
+        data=csv,
+        file_name="trading_history.csv",
+        mime="text/csv"
+    )
+
+# --- Model Registry Tab ---
+def model_registry_tab():
+    st.header("Model Registry")
+    if "models" not in st.session_state:
+        st.session_state["models"] = {}
+    uploaded_file = st.file_uploader("Upload ML Model (.pkl)", type=["pkl"])
+    if uploaded_file is not None:
+        try:
+            model = pickle.load(uploaded_file)

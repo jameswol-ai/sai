@@ -1,4 +1,3 @@
-
 import streamlit as st
 import threading
 import time
@@ -51,12 +50,15 @@ def generate_trade():
     positions = st.session_state.get("positions", [])
 
     active_model_name = st.session_state.get("active_model")
-    if active_model_name:
-        model = st.session_state["models"][active_model_name]
-        try:
-            decision = model.predict([[price]])[0]
-        except Exception as e:
-            logging.error(f"Model prediction failed: {e}")
+    if active_model_name and "models" in st.session_state:
+        model = st.session_state["models"].get(active_model_name)
+        if model:
+            try:
+                decision = model.predict([[price]])[0]
+            except Exception as e:
+                logging.error(f"Model prediction failed: {e}")
+                decision = random.choice(["BUY", "SELL", "HOLD"])
+        else:
             decision = random.choice(["BUY", "SELL", "HOLD"])
     else:
         decision = random.choice(["BUY", "SELL", "HOLD"])
@@ -84,9 +86,7 @@ def trading_loop():
     while st.session_state.get("running", False):
         result = generate_trade()
         st.session_state["last_result"] = result
-        if "history" not in st.session_state:
-            st.session_state["history"] = []
-        st.session_state["history"].append(result)
+        st.session_state.setdefault("history", []).append(result)
         time.sleep(5)
 
 def start_trading():
@@ -98,7 +98,7 @@ def start_trading():
 def stop_trading():
     st.session_state["running"] = False
 
-# --- Dashboard Tab ---
+# --- Tabs ---
 def dashboard_tab():
     st.header("Dashboard")
     client = init_binance()
@@ -125,11 +125,10 @@ def dashboard_tab():
         st.metric("Balance", result["balance"])
         st.write("Positions:", result["positions"])
 
-# --- Strategy Config Tab ---
 def strategy_config_tab():
     st.header("Strategy Config")
-    buy_threshold = st.number_input("Buy threshold", value=100.0)
-    sell_threshold = st.number_input("Sell threshold", value=105.0)
+    buy_threshold = st.number_input("Buy threshold", value=st.session_state.get("buy_threshold", 100.0))
+    sell_threshold = st.number_input("Sell threshold", value=st.session_state.get("sell_threshold", 105.0))
     symbol = st.text_input("Trading Symbol", value=st.session_state.get("symbol", "BTCUSDT"))
     if st.button("Update Strategy"):
         st.session_state["buy_threshold"] = buy_threshold
@@ -137,7 +136,6 @@ def strategy_config_tab():
         st.session_state["symbol"] = symbol
         st.success(f"Updated strategy: BUY<{buy_threshold}, SELL>{sell_threshold}, Symbol={symbol}")
 
-# --- Logs Tab ---
 def logs_tab():
     st.header("Logs")
     try:
@@ -147,13 +145,15 @@ def logs_tab():
     except FileNotFoundError:
         st.warning("No logs yet.")
 
-# --- Model Testing Tab ---
 def model_testing_tab():
     st.header("Model Testing")
-    if "active_model" not in st.session_state:
+    if "active_model" not in st.session_state or "models" not in st.session_state:
         st.warning("No active model selected.")
         return
-    model = st.session_state["models"][st.session_state["active_model"]]
+    model = st.session_state["models"].get(st.session_state["active_model"])
+    if not model:
+        st.warning("Active model not found.")
+        return
     test_data = pd.DataFrame({"price": [95, 100, 105, 110]})
     try:
         predictions = model.predict(test_data)
@@ -161,7 +161,6 @@ def model_testing_tab():
     except Exception as e:
         st.error(f"Model testing failed: {e}")
 
-# --- Debug Tab ---
 def debug_tab():
     st.header("Debug")
     st.json({
@@ -173,7 +172,6 @@ def debug_tab():
         "symbol": st.session_state.get("symbol", "BTCUSDT")
     })
 
-# --- Analytics Tab ---
 def analytics_tab():
     st.header("Analytics")
     if "history" not in st.session_state or not st.session_state["history"]:
@@ -215,7 +213,6 @@ def analytics_tab():
         mime="text/csv"
     )
 
-# --- Model Registry Tab ---
 def model_registry_tab():
     st.header("Model Registry")
     if "models" not in st.session_state:
@@ -232,11 +229,4 @@ def model_registry_tab():
     if st.session_state["models"]:
         st.subheader("Available Models")
         for name in st.session_state["models"].keys():
-            if st.button(f"Activate {name}"):
-                st.session_state["active_model"] = name
-                st.success(f"Activated model: {name}")
-
-# --- Main App ---
-def main():
-    st.title("Trading Bot Dashboard")
-    tabs = st.tabs
+            if st.button(f

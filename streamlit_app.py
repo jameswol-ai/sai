@@ -229,8 +229,26 @@ def model_registry_tab():
                 st.session_state["active_model"] = name
                 st.success(f"Activated model: {name}")
 
+from prometheus_client import Gauge, start_http_server
 
-    # --- Main App ---
+# --- Prometheus Metrics ---
+trade_price_gauge = Gauge("sai_trade_price", "Latest trade price")
+balance_gauge = Gauge("sai_balance", "Current account balance")
+positions_gauge = Gauge("sai_positions", "Number of open positions")
+decision_gauge = Gauge("sai_decision", "Decision encoded as BUY=1, SELL=2, HOLD=3")
+
+def update_metrics(result):
+    trade_price_gauge.set(result["price"])
+    balance_gauge.set(result["balance"])
+    positions_gauge.set(len(result["positions"]))
+    if result["decision"] == "BUY":
+        decision_gauge.set(1)
+    elif result["decision"] == "SELL":
+        decision_gauge.set(2)
+    else:
+        decision_gauge.set(3)
+
+# --- Main App ---
 def main():
     st.title("Trading Bot Dashboard")
     tabs = st.tabs([
@@ -259,4 +277,6 @@ def main():
         model_registry_tab()
 
 if __name__ == "__main__":
+    # Start Prometheus metrics server on port 8000
+    start_http_server(8000)
     main()

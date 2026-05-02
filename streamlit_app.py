@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import pickle
 import random
 import logging
-import yaml
+import binance.yaml
 from binance.client import Client
 
 # --- Logging Setup ---

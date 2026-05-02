@@ -162,12 +162,7 @@ def dashboard_tab():
 
 # --- Main App ---
 def main():
-    init_defaults()
-    st.title("Trading Bot Dashboard_tab)
-
-# --- Main App ---
-def main():
-    init_defaults()
+    init_defaults()  # ensure session state defaults are set
     st.title("Trading Bot Dashboard")
     tabs = st.tabs([
         "📊 Dashboard",
@@ -178,13 +173,22 @@ def main():
         "📈 Analytics",
         "📂 Model Registry"
     ])
-    with tabs[0]: dashboard_tab()
-    with tabs[1]: strategy_config_tab()
-    with tabs[2]: logs_tab()
-    with tabs[3]: model_testing_tab()
-    with tabs[4]: debug_tab()
-    with tabs[5]: analytics_tab()
-    with tabs[6]: model_registry_tab()
+
+    with tabs[0]:
+        dashboard_tab()
+    with tabs[1]:
+        strategy_config_tab()
+    with tabs[2]:
+        logs_tab()
+    with tabs[3]:
+        model_testing_tab()
+    with tabs[4]:
+        debug_tab()
+    with tabs[5]:
+        analytics_tab()
+    with tabs[6]:
+        model_registry_tab()
 
 if __name__ == "__main__":
     main()
+

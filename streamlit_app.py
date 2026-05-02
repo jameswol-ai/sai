@@ -1,12 +1,7 @@
 import streamlit as st
-import threading
-import time
+import threading, time, random, logging, pickle, yaml
 import pandas as pd
 import matplotlib.pyplot as plt
-import pickle
-import random
-import logging
-import yaml
 from binance.client import Client
 from prometheus_client import Gauge, start_http_server, CollectorRegistry
 
@@ -25,11 +20,11 @@ def init_defaults():
         "models": {},
         "history": []
     }
-    for key, value in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
 
-# --- Binance Client Setup ---
+# --- Binance Client ---
 def init_binance():
     try:
         with open("sai/configs/binance.yaml", "r") as f:
@@ -50,8 +45,7 @@ def get_live_price(symbol="BTCUSDT"):
     client = init_binance()
     if client:
         try:
-            ticker = client.get_symbol_ticker(symbol=symbol)
-            return float(ticker["price"])
+            return float(client.get_symbol_ticker(symbol=symbol)["price"])
         except Exception as e:
             logging.error(f"Binance price feed error: {e}")
             st.warning(f"Could not fetch live price for {symbol}, using fallback.")
@@ -81,9 +75,7 @@ def generate_trade():
 
     st.session_state["balance"] = balance
     st.session_state["positions"] = positions
-
-    result = {"decision": decision, "price": price,
-              "balance": balance, "positions": positions.copy()}
+    result = {"decision": decision, "price": price, "balance": balance, "positions": positions.copy()}
     logging.info(f"Trade executed: {result}")
     return result
 
@@ -131,7 +123,7 @@ def start_trading():
 def stop_trading():
     st.session_state["running"] = False
 
-# --- Tabs (examples shown, keep others as before) ---
+# --- Tabs (example: dashboard) ---
 def dashboard_tab():
     st.header("Dashboard")
     client = init_binance()
@@ -172,12 +164,7 @@ def main():
         "📂 Model Registry"
     ])
     with tabs[0]: dashboard_tab()
-    with tabs[1]: strategy_config_tab()
-    with tabs[2]: logs_tab()
-    with tabs[3]: model_testing_tab()
-    with tabs[4]: debug_tab()
-    with tabs[5]: analytics_tab()
-    with tabs[6]: model_registry_tab()
+    # add other tab calls here (strategy_config_tab, logs_tab, etc.)
 
 if __name__ == "__main__":
     main()

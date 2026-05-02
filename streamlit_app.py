@@ -6,12 +6,8 @@ import matplotlib.pyplot as plt
 import pickle
 import random
 import logging
-
-# --- Try importing yaml safely ---
-try:
-    import binance.yaml
-
-from binance.client import binance.yaml
+import yaml
+from binance.client import Client
 
 # --- Logging Setup ---
 logging.basicConfig(filename="workflow.log", level=logging.INFO,
@@ -19,9 +15,6 @@ logging.basicConfig(filename="workflow.log", level=logging.INFO,
 
 # --- Binance Client Setup ---
 def init_binance():
-    if yaml is None:
-        st.warning("PyYAML not installed. Cannot load Binance configuration.")
-        return None
     try:
         with open("sai/configs/binance.yaml", "r") as f:
             cfg = yaml.safe_load(f)
@@ -231,4 +224,18 @@ def model_registry_tab():
         try:
             model = pickle.load(uploaded_file)
             st.session_state["models"][uploaded_file.name] = model
-            st.success(f"Model '{uploaded_file
+            st.success(f"Model '{uploaded_file.name}' added successfully.")
+        except Exception as e:
+            st.error(f"Failed to load model: {e}")
+
+    if st.session_state["models"]:
+        st.subheader("Available Models")
+        for name in st.session_state["models"].keys():
+            if st.button(f"Activate {name}"):
+                st.session_state["active_model"] = name
+                st.success(f"Activated model: {name}")
+
+# --- Main App ---
+def main():
+    st.title("Trading Bot Dashboard")
+    tabs = st.tabs

@@ -43,7 +43,7 @@ def getliveprice(symbol="BTCUSDT"):
             st.warning(f"Could not fetch live price for {symbol}, using fallback.")
     return round(random.uniform(95, 110), 2)
 
---- Trade Generator ---
+#--- Trade Generator ---
 def generate_trade():
     symbol = st.session_state.get("symbol", "BTCUSDT")
     price = getliveprice(symbol)

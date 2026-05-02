@@ -234,3 +234,7 @@ def model_registry_tab():
             if st.button(f"Activate {name}"):
                 st.session_state["active_model"] = name
                 st.success(f"Activated model: {name}")
+
+def main():
+    st.title("Trading Bot Dashboard")
+    tabs = st.tabs

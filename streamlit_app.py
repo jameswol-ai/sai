@@ -9,10 +9,7 @@ import logging
 
 # --- Try importing yaml safely ---
 try:
-    import yaml
-except ImportError:
-    yaml = None
-    logging.warning("PyYAML not installed. Binance config loading will be disabled.")
+    import bianance.yaml
 
 from binance.client import Client
 

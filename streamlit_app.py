@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import pickle
 import random
 import logging
-import yaml   # <-- FIXED: use PyYAML
+import yaml
 from binance.client import Client
 
 # --- Logging Setup ---
@@ -40,9 +40,9 @@ def get_live_price(symbol="BTCUSDT"):
         except Exception as e:
             logging.error(f"Binance price feed error: {e}")
             st.warning(f"Could not fetch live price for {symbol}, using fallback.")
-    return round(random.uniform(95, 110), 2)  # fallback
+    return round(random.uniform(95, 110), 2)
 
-# --- Trade Generator with ML Integration ---
+# --- Trade Generator ---
 def generate_trade():
     symbol = st.session_state.get("symbol", "BTCUSDT")
     price = get_live_price(symbol)
@@ -100,7 +100,6 @@ def stop_trading():
 # --- Dashboard Tab ---
 def dashboard_tab():
     st.header("Dashboard")
-
     client = init_binance()
     if client:
         try:
@@ -110,7 +109,7 @@ def dashboard_tab():
             logging.error(f"Binance ping failed: {e}")
             st.error("❌ Binance connection failed")
     else:
-        st.warning("⚠️ Binance client not initialized (check API keys/config)")
+        st.warning("⚠️ Binance client not initialized")
 
     col1, col2 = st.columns(2)
     if col1.button("Start Live Trading"):
@@ -130,12 +129,12 @@ def strategy_config_tab():
     st.header("Strategy Config")
     buy_threshold = st.number_input("Buy threshold", value=100.0)
     sell_threshold = st.number_input("Sell threshold", value=105.0)
-    symbol = st.text_input("Trading Symbol (e.g. BTCUSDT)", value=st.session_state.get("symbol", "BTCUSDT"))
+    symbol = st.text_input("Trading Symbol", value=st.session_state.get("symbol", "BTCUSDT"))
     if st.button("Update Strategy"):
         st.session_state["buy_threshold"] = buy_threshold
         st.session_state["sell_threshold"] = sell_threshold
         st.session_state["symbol"] = symbol
-        st.success(f"Updated: BUY<{buy_threshold}, SELL>{sell_threshold}, Symbol={symbol}")
+        st.success(f"Updated strategy: BUY<{buy_threshold}, SELL>{sell_threshold}, Symbol={symbol}")
 
 # --- Logs Tab ---
 def logs_tab():
@@ -145,7 +144,7 @@ def logs_tab():
             logs = f.read()
         st.text_area("Workflow Logs", logs, height=300)
     except FileNotFoundError:
-        st.warning("No logs yet. Run the workflow first.")
+        st.warning("No logs yet.")
 
 # --- Model Testing Tab ---
 def model_testing_tab():
@@ -177,7 +176,7 @@ def debug_tab():
 def analytics_tab():
     st.header("Analytics")
     if "history" not in st.session_state or not st.session_state["history"]:
-        st.warning("No trading history yet. Run the bot first.")
+        st.warning("No trading history yet.")
         return
     df = pd.DataFrame(st.session_state["history"])
     st.subheader("Quick Metrics")
@@ -192,7 +191,7 @@ def analytics_tab():
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Total Trades", total_trades)
-    col2.metric("Buys / Sells / Holds", f"{buys}/{sells}/{holds}")
+    col2.metric("Buys/Sells/Holds", f"{buys}/{sells}/{holds}")
     col3.metric("Win Rate", f"{win_rate:.2%}")
     st.metric("Average Price", f"{avg_price:.2f}")
     st.metric("Sharpe Ratio", f"{sharpe:.2f}")
@@ -207,20 +206,4 @@ def analytics_tab():
     ax2.legend()
     st.pyplot(fig2)
 
-    csv = df.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        label="Download Trading History CSV",
-        data=csv,
-        file_name="trading_history.csv",
-        mime="text/csv"
-    )
-
-# --- Model Registry Tab ---
-def model_registry_tab():
-    st.header("Model Registry")
-    if "models" not in st.session_state:
-        st.session_state["models"] = {}
-    uploaded_file = st.file_uploader("Upload ML Model (.pkl)", type=["pkl"])
-    if uploaded_file is not None:
-        try:
-            model = pickle.load(uploaded_file)
+    csv = df.to_csv(index=False).encode("

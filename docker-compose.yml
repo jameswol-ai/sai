@@ -1,0 +1,14 @@
+version: "3.9"
+
+services:
+  tradingbot:
+    build: .
+    container_name: tradingbot
+    ports:
+      - "8501:8501"
+    environment:
+      # Set your Binance API keys here (never hardcode them in your code!)
+      BINANCE_API_KEY: ${BINANCE_API_KEY}
+      BINANCE_API_SECRET: ${BINANCE_API_SECRET}
+    volumes:
+      - ./logs:/app/logs

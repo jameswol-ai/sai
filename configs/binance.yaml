@@ -1,3 +1,21 @@
+# Binance API configuration
+
+# Your personal API key and secret from Binance
+api_key: "YOUR_BINANCE_API_KEY"
+api_secret: "YOUR_BINANCE_SECRET_KEY"
+
+# Trading pair settings
+base_asset: "BTC"
+quote_asset: "USDT"
+
+# Risk management
+max_position_size: 0.1        # Maximum BTC per trade
+stop_loss_pct: 0.02           # 2% stop loss
+take_profit_pct: 0.05         # 5% take profit
+
+# Environment
+sandbox: false                # Set true if using Binance Testnet
+
 api_key: yvXhKnIEIn5wRmGtWOlRziIWpVXZ73P1zgPWkT5KYBmWjRQfkyaa4Gzufx9pf1xT
 api_secret: PZXFx5NFQDPVt7PtSm5YBIZv9IHNSrkx91BuVqsZxfDPuW0GfFKr8FCHkcw7SSsO
 

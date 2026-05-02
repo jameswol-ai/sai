@@ -215,6 +215,8 @@ def analytics_tab():
 
 def model_registry_tab():
     st.header("Model Registry")
+def model_registry_tab():
+    st.header("Model Registry")
     if "models" not in st.session_state:
         st.session_state["models"] = {}
     uploaded_file = st.file_uploader("Upload ML Model (.pkl)", type=["pkl"])
@@ -229,4 +231,6 @@ def model_registry_tab():
     if st.session_state["models"]:
         st.subheader("Available Models")
         for name in st.session_state["models"].keys():
-            if st.button(f
+            if st.button(f"Activate {name}"):
+                st.session_state["active_model"] = name
+                st.success(f"Activated model: {name}")

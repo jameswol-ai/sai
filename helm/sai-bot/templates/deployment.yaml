@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sai-bot.fullname" . }}
+  labels:
+    {{- include "sai-bot.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "sai-bot.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "sai-bot.name" . }}
+    spec:
+      containers:
+        - name: sai-bot
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8501
+          env:
+            - name: STREAMLIT_SERVER_PORT
+              value: "8501"
+            - name: STREAMLIT_SERVER_ADDRESS
+              value: "0.0.0.0"
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

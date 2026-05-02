@@ -147,7 +147,7 @@ def logs_tab():
     except FileNotFoundError:
         st.warning("No logs yet.")
 
---- Model Testing Tab ---
+#--- Model Testing Tab ---
 def modeltestingtab():
     st.header("Model Testing")
     if "activemodel" not in st.sessionstate:

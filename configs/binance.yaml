@@ -1,25 +1,27 @@
+streamlit run sai/streamlit_app.py
+
 # Binance API configuration
 
-# Your personal API key and secret from Binance
-api_key: "YOUR_BINANCE_API_KEY"
-api_secret: "YOUR_BINANCE_SECRET_KEY"
-
-# Trading pair settings
-base_asset: "BTC"
-quote_asset: "USDT"
-
-# Risk management
-max_position_size: 0.1        # Maximum BTC per trade
-stop_loss_pct: 0.02           # 2% stop loss
-take_profit_pct: 0.05         # 5% take profit
-
-# Environment
-sandbox: false                # Set true if using Binance Testnet
-
+# Your API credentials (keep secret!)
 api_key: yvXhKnIEIn5wRmGtWOlRziIWpVXZ73P1zgPWkT5KYBmWjRQfkyaa4Gzufx9pf1xT
 api_secret: PZXFx5NFQDPVt7PtSm5YBIZv9IHNSrkx91BuVqsZxfDPuW0GfFKr8FCHkcw7SSsO
 
-# Optional trading parameters
+# Trading pair configuration
 base_asset: "BTC"
 quote_asset: "USDT"
+
+# Sandbox mode (true = testnet, false = live trading)
 sandbox: false
+
+# Risk management
+max_position_size: 0.1        # maximum position size in base asset
+stop_loss_pct: 0.05           # stop loss threshold (5%)
+take_profit_pct: 0.10         # take profit threshold (10%)
+
+# Logging options
+log_trades: true
+log_file: "workflow.log"
+
+# WebSocket options
+use_websocket: true
+ws_timeout: 30

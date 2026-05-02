@@ -1,0 +1,39 @@
+replicaCount: 4   # scale higher for production
+
+image:
+  repository: youruser/sai-bot
+  tag: stable     # use a stable tag instead of latest
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 8501
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: sai-bot.prod.example.com   # replace with your production domain
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: sai-bot-prod-tls
+      hosts:
+        - sai-bot.prod.example.com
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: 1
+    memory: 2Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70

@@ -1,0 +1,60 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "SAI Trading Bot Dashboard",
+    "tags": ["trading", "prometheus"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "type": "graph",
+        "title": "Trade Price",
+        "targets": [
+          { "expr": "sai_trade_price", "legendFormat": "Price" }
+        ],
+        "id": 1
+      },
+      {
+        "type": "graph",
+        "title": "Balance",
+        "targets": [
+          { "expr": "sai_balance", "legendFormat": "Balance" }
+        ],
+        "id": 2
+      },
+      {
+        "type": "graph",
+        "title": "Positions",
+        "targets": [
+          { "expr": "sai_positions", "legendFormat": "Positions" }
+        ],
+        "id": 3
+      },
+      {
+        "type": "stat",
+        "title": "Decision",
+        "targets": [
+          { "expr": "sai_decision", "legendFormat": "Decision" }
+        ],
+        "id": 4
+      },
+      {
+        "type": "graph",
+        "title": "Win Rate",
+        "targets": [
+          { "expr": "sai_win_rate", "legendFormat": "Win Rate" }
+        ],
+        "id": 5
+      },
+      {
+        "type": "graph",
+        "title": "Sharpe Ratio",
+        "targets": [
+          { "expr": "sai_sharpe_ratio", "legendFormat": "Sharpe Ratio" }
+        ],
+        "id": 6
+      }
+    ],
+    "schemaVersion": 36,
+    "version": 1
+  }
+}

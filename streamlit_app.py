@@ -10,11 +10,11 @@ import logging
 import yaml
 from binance.client import Client
 
---- Logging Setup ---
+#--- Logging Setup ---
 logging.basicConfig(filename="workflow.log", level=logging.INFO,
                     format="%(asctime)s - %(levelname)s - %(message)s")
 
---- Binance Client Setup ---
+#--- Binance Client Setup ---
 def init_binance():
     try:
         with open("sai/configs/binance.yaml", "r") as f:
@@ -79,7 +79,7 @@ def generate_trade():
     logging.info(f"Trade executed: {result}")
     return result
 
---- Live Trading Loop ---
+#--- Live Trading Loop ---
 def trading_loop():
     while st.session_state.get("running", False):
         result = generate_trade()
@@ -98,7 +98,7 @@ def start_trading():
 def stop_trading():
     st.session_state["running"] = False
 
---- Dashboard Tab ---
+#--- Dashboard Tab ---
 def dashboard_tab():
     st.header("Dashboard")
     client = init_binance()
@@ -125,7 +125,7 @@ def dashboard_tab():
         st.metric("Balance", result["balance"])
         st.write("Positions:", result["positions"])
 
---- Strategy Config Tab ---
+#--- Strategy Config Tab ---
 def strategyconfigtab():
     st.header("Strategy Config")
     buythreshold = st.numberinput("Buy threshold", value=100.0)
@@ -215,7 +215,7 @@ def analytics_tab():
         mime="text/csv"
     )
 
---- Model Registry Tab ---
+#--- Model Registry Tab ---
 def modelregistrytab():
     st.header("Model Registry")
     if "models" not in st.session_state:
@@ -236,7 +236,7 @@ def modelregistrytab():
                 st.sessionstate["activemodel"] = name
                 st.success(f"Activated model: {name}")
 
---- Main App ---
+#--- Main App ---
 def main():
     st.title("Trading Bot Dashboard")
     tabs = st.tabs

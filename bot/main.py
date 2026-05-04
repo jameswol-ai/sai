@@ -1,7 +1,7 @@
 import random
 import sai
 
-snap, metrics = engine.run_cycle()
+snap, metrics, chart = engine.run_cycle()
 
 print(
     f"[{snap['cycle']}] "
@@ -10,9 +10,10 @@ print(
     f"PnL: {snap['pnl']} | "
     f"Bal: {snap['balance']} | "
     f"Sharpe: {metrics['sharpe']} | "
-    f"WinRate: {metrics['win_rate']} | "
-    f"DD: {metrics['max_drawdown']}"
+    f"WinRate: {metrics['win_rate']}"
 )
+
+print(chart)
 
 def get_data():
     """Simulate fetching a price feed (replace with real API)."""

@@ -4,10 +4,7 @@
       "title": "Trades Executed",
       "type": "graph",
       "targets": [
-        {
-          "expr": "sai_trades_total",
-          "legendFormat": "{{action}}"
-        }
+        { "expr": "sai_trades_total", "legendFormat": "{{action}}" }
       ],
       "lines": true,
       "linewidth": 2
@@ -16,36 +13,222 @@
       "title": "Last Prediction",
       "type": "stat",
       "targets": [
-        {
-          "expr": "sai_last_prediction"
-        }
+        { "expr": "sai_last_prediction" }
       ],
-      "options": {
-        "reduceOptions": {
-          "calcs": ["last"]
-        }
-      }
+      "options": { "reduceOptions": { "calcs": ["last"] } }
     },
     {
       "title": "Model Accuracy",
       "type": "gauge",
       "targets": [
-        {
-          "expr": "sai_model_accuracy"
-        }
+        { "expr": "sai_model_accuracy" }
       ],
       "options": {
-        "reduceOptions": {
-          "calcs": ["last"]
-        },
+        "reduceOptions": { "calcs": ["last"] },
         "showThresholdLabels": true,
-        "showThresholdMarkers": true
+        "showThresholdMarkers": true,
+        "thresholds": {
+          "mode": "absolute",
+          "steps": [
+            { "color": "green", "value": 80 },
+            { "color": "yellow", "value": 60 },
+            { "color": "red", "value": null }
+          ]
+        }
+      },
+      "alert": {
+        "conditions": [
+          {
+            "evaluator": { "type": "lt", "params": [60] },
+            "operator": { "type": "and" },
+            "query": { "params": ["A"] },
+            "reducer": { "type": "last" },
+            "type": "query"
+          }
+        ],
+        "for": "5m",
+        "name": "Model Accuracy Alert",
+        "severity": "CRITICAL",
+        "notifications": [
+          { "uid": "slack_channel_uid" },
+          { "uid": "email_channel_uid" },
+          { "uid": "pagerduty_channel_uid" }
+        ]
+      }
+    },
+    {
+      "title": "Sharpe Ratio",
+      "type": "stat",
+      "targets": [
+        { "expr": "sai_sharpe_ratio" }
+      ],
+      "options": { "reduceOptions": { "calcs": ["last"] } },
+      "alert": {
+        "conditions": [
+          {
+            "evaluator": { "type": "lt", "params": [1.0] },
+            "operator": { "type": "and" },
+            "query": { "params": ["A"] },
+            "reducer": { "type": "last" },
+            "type": "query"
+          }
+        ],
+        "for": "5m",
+        "name": "Sharpe Ratio Alert",
+        "severity": "WARNING",
+        "notifications": [
+          { "uid": "slack_channel_uid" },
+          { "uid": "email_channel_uid" },
+          { "uid": "pagerduty_channel_uid" }
+        ]
+      }
+    },
+    {
+      "title": "Win Rate",
+      "type": "gauge",
+      "targets": [
+        { "expr": "sai_win_rate" }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["last"] },
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true,
+        "thresholds": {
+          "mode": "absolute",
+          "steps": [
+            { "color": "green", "value": 70 },
+            { "color": "yellow", "value": 50 },
+            { "color": "red", "value": null }
+          ]
+        }
+      },
+      "alert": {
+        "conditions": [
+          {
+            "evaluator": { "type": "lt", "params": [50] },
+            "operator": { "type": "and" },
+            "query": { "params": ["A"] },
+            "reducer": { "type": "last" },
+            "type": "query"
+          }
+        ],
+        "for": "5m",
+        "name": "Win Rate Alert",
+        "severity": "WARNING",
+        "notifications": [
+          { "uid": "slack_channel_uid" },
+          { "uid": "email_channel_uid" },
+          { "uid": "pagerduty_channel_uid" }
+        ]
+      }
+    },
+    {
+      "title": "Max Drawdown",
+      "type": "stat",
+      "targets": [
+        { "expr": "sai_max_drawdown" }
+      ],
+      "options": { "reduceOptions": { "calcs": ["last"] } },
+      "alert": {
+        "conditions": [
+          {
+            "evaluator": { "type": "gt", "params": [20] },
+            "operator": { "type": "and" },
+            "query": { "params": ["A"] },
+            "reducer": { "type": "last" },
+            "type": "query"
+          }
+        ],
+        "for": "5m",
+        "name": "Max Drawdown Alert",
+        "severity": "CRITICAL",
+        "notifications": [
+          { "uid": "slack_channel_uid" },
+          { "uid": "email_channel_uid" },
+          { "uid": "pagerduty_channel_uid" }
+        ]
+      }
+    },
+    {
+      "title": "Average Trade Duration",
+      "type": "stat",
+      "targets": [
+        { "expr": "sai_avg_trade_duration" }
+      ],
+      "options": { "reduceOptions": { "calcs": ["last"] } }
+    },
+    {
+      "title": "System Health",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "node_cpu_seconds_total", "legendFormat": "CPU" },
+        { "expr": "node_memory_MemAvailable_bytes", "legendFormat": "Memory Available" },
+        { "expr": "sai_system_latency_ms", "legendFormat": "Latency (ms)" }
+      ],
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom" }
+      },
+      "alert": {
+        "conditions": [
+          {
+            "evaluator": { "type": "gt", "params": [80] },
+            "operator": { "type": "and" },
+            "query": { "params": ["A"] },
+            "reducer": { "type": "last" },
+            "type": "query"
+          }
+        ],
+        "for": "5m",
+        "name": "System Health Alert",
+        "severity": "CRITICAL",
+        "notifications": [
+          { "uid": "slack_channel_uid" },
+          { "uid": "email_channel_uid" },
+          { "uid": "pagerduty_channel_uid" }
+        ]
+      }
+    },
+    {
+      "title": "Overall Status",
+      "type": "stat",
+      "targets": [
+        { "expr": "sai_overall_status" }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["last"] },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "thresholds": {
+          "mode": "absolute",
+          "steps": [
+            { "color": "green", "value": 80 },
+            { "color": "yellow", "value": 60 },
+            { "color": "red", "value": null }
+          ]
+        }
+      },
+      "alert": {
+        "conditions": [
+          {
+            "evaluator": { "type": "lt", "params": [60] },
+            "operator": { "type": "and" },
+            "query": { "params": ["A"] },
+            "reducer": { "type": "last" },
+            "type": "query"
+          }
+        ],
+        "for": "5m",
+        "name": "Overall Status Alert",
+        "severity": "CRITICAL",
+        "notifications": [
+          { "uid": "slack_channel_uid" },
+          { "uid": "email_channel_uid" },
+          { "uid": "pagerduty_channel_uid" }
+        ]
       }
     }
   ],
   "title": "SAI Trading Bot Dashboard",
-  "time": {
-    "from": "now-1h",
-    "to": "now"
-  }
+  "time": { "from": "now-1h", "to": "now" }
 }

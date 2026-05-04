@@ -3,6 +3,9 @@ import threading
 import time
 import json
 
+# ---------------------------------------------------------
+# Imports from your SAI modules
+# ---------------------------------------------------------
 from sai.model.simple_model import SimpleModel
 from sai.broker.simulated_broker import SimulatedBroker
 from sai.core.metrics import RollingMetrics
@@ -11,7 +14,7 @@ from sai.core.equity_chart import EquityCurveASCII
 
 
 # ---------------------------------------------------------
-# Inline Trading Engine (no engine.py)
+# Inline Trading Engine (no engine.py required)
 # ---------------------------------------------------------
 class InlineTradingEngine:
     def __init__(self):
@@ -45,7 +48,7 @@ class InlineTradingEngine:
 
 
 # ---------------------------------------------------------
-# Initialize Session State
+# Initialize Streamlit Session State
 # ---------------------------------------------------------
 def init_state():
     if "engine" not in st.session_state:
@@ -88,7 +91,7 @@ def trading_loop():
 
 
 # ---------------------------------------------------------
-# UI Tabs
+# Dashboard Tab
 # ---------------------------------------------------------
 def dashboard_tab():
     st.header("📊 SAI Live Dashboard")
@@ -117,16 +120,25 @@ def dashboard_tab():
     st.code(st.session_state.last_chart or "(waiting…)")
 
 
+# ---------------------------------------------------------
+# Logs Tab
+# ---------------------------------------------------------
 def logs_tab():
     st.header("📜 Logs")
     st.text("\n".join(st.session_state.logs[-200:]))
 
 
+# ---------------------------------------------------------
+# Strategy Tab
+# ---------------------------------------------------------
 def strategy_tab():
     st.header("⚙ Strategy Config")
-    st.write("This version uses SimpleModel(). Plugin loader coming soon.")
+    st.write("This version uses SimpleModel(). Strategy plugin loader coming soon.")
 
 
+# ---------------------------------------------------------
+# Debug Tab
+# ---------------------------------------------------------
 def debug_tab():
     st.header("🛠 Debug")
     st.code(json.dumps(dict(st.session_state), indent=2))

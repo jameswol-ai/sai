@@ -61,7 +61,7 @@ class Metrics:
                 "last_action": self.actions[-1] if self.actions else None,
                 "balance": self.balance,
                 "pnl": self.pnl,
-                "prices": list(self.prices),  # return a copy for safe iteration
+                "prices": list(self.prices),
             }
 
 
@@ -112,10 +112,8 @@ class CoreLoop:
                 price = self.bot.get_price()
                 action, trade = self.bot.step(price)
 
-                # Update metrics (thread-safe)
                 self.metrics.update(price, action, trade, self.bot)
 
-                # Write CSV (thread-safe)
                 self.csv_exporter.write_row({
                     "timestamp": datetime.utcnow().isoformat(),
                     "price": price,
@@ -143,17 +141,13 @@ st.title("SAI Trading Dashboard (Standalone Multi‑Tab Version)")
 
 if "bot" not in st.session_state:
     st.session_state.bot = TradingBot()
-
 if "metrics" not in st.session_state:
     st.session_state.metrics = Metrics()
-
 if "csv" not in st.session_state:
     st.session_state.csv = CSVExporter()
-
 if "loop" not in st.session_state:
     st.session_state.loop = None
 
-# UI helper: read snapshot and write to session_state in UI thread only
 def update_ui_from_metrics():
     snap = st.session_state.metrics.snapshot()
     st.session_state.last_price = snap["last_price"]
@@ -197,7 +191,6 @@ with tab_dashboard:
     auto_refresh = col3.checkbox("Auto-refresh UI", value=True)
     refresh_interval = col3.number_input("Refresh interval (s)", min_value=0.5, max_value=10.0, value=1.0, step=0.5)
 
-    # Update UI values from metrics snapshot (UI thread)
     update_ui_from_metrics()
 
     st.subheader("Live Metrics")
@@ -210,16 +203,11 @@ with tab_dashboard:
     prices_for_chart = st.session_state.get("_prices_for_chart", [])
     st.line_chart(prices_for_chart)
 
-    # Manual refresh button
-    if st.button("Refresh now"):
-        st.experimental_rerun()
-
-    # Simple auto-refresh: re-run the app after sleep in the UI thread
     if auto_refresh:
-        # Sleep briefly then rerun so UI updates from background thread are shown.
-        time.sleep(refresh_interval)
-        st.experimental_rerun()
-
+        st_autorefresh = st.experimental_rerun  # fallback for compatibility
+        st_autorefresh = st.autorefresh if hasattr(st, "autorefresh") else None
+        if st_autorefresh:
+            st_autorefresh(interval=int(refresh_interval * 1000), key="refresh")
 
 # ---------------------------------------------------------
 # Strategy Tab
@@ -236,7 +224,6 @@ with tab_logs:
     st.subheader("CSV Log Preview")
 
     if os.path.exists(st.session_state.csv.filename):
-        # Show download button using a fresh file read
         with open(st.session_state.csv.filename, "rb") as f:
             data = f.read()
             st.download_button("Download trades.csv", data, file_name="trades.csv")

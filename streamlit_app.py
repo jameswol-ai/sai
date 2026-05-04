@@ -1,94 +1,129 @@
-# sai/streamlit_app.py
-
-import os
-print("Working directory:", os.getcwd())
-print("FILESYSTEM:", os.listdir("/mount/src/sai"))
-print("CORE:", os.listdir("/mount/src/sai/core"))
 import streamlit as st
-import threading
-import time
-import logging
 import pandas as pd
-from sai.bot.maim import Sai
+import time
+import random
+import logging
+from datetime import datetime
 
-# Configure logging
-logging.basicConfig(
-    filename="sai_app.log",
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
+# ---------------------------------------------------------
+# Local Lightweight TradingBot Stub (No external imports)
+# ---------------------------------------------------------
+class TradingBot:
+    def __init__(self):
+        self.balance = 1000.0
+        self.position = None
+        self.trade_history = []
+        self.last_price = None
 
-# Initialize session state
-if "bot" not in st.session_state:
-    st.session_state.bot = Sai()
-if "running" not in st.session_state:
-    st.session_state.running = False
-if "logs" not in st.session_state:
-    st.session_state.logs = []
+    def get_price(self):
+        # Simulated price feed
+        price = round(100 + random.uniform(-1, 1), 4)
+        self.last_price = price
+        return price
 
-# Background trading loop
+    def decide(self, price):
+        # Simple random strategy
+        return random.choice(["BUY", "SELL", "HOLD"])
+
+    def execute_trade(self, action, price):
+        timestamp = datetime.utcnow().isoformat()
+
+        if action == "BUY":
+            self.position = price
+            self.trade_history.append({"time": timestamp, "action": "BUY", "price": price})
+
+        elif action == "SELL" and self.position is not None:
+            pnl = price - self.position
+            self.balance += pnl
+            self.trade_history.append({"time": timestamp, "action": "SELL", "price": price, "pnl": pnl})
+            self.position = None
+
+        return True
+
+# ---------------------------------------------------------
+# Streamlit App
+# ---------------------------------------------------------
+def init_state():
+    if "bot" not in st.session_state:
+        st.session_state.bot = TradingBot()
+    if "running" not in st.session_state:
+        st.session_state.running = False
+    if "logs" not in st.session_state:
+        st.session_state.logs = []
+    if "prices" not in st.session_state:
+        st.session_state.prices = []
+
+def log(msg):
+    timestamp = datetime.utcnow().strftime("%H:%M:%S")
+    st.session_state.logs.append(f"[{timestamp}] {msg}")
+
 def run_trading_loop():
-    while st.session_state.running:
-        try:
-            trade_info = st.session_state.bot.run_once()
-            if trade_info:
-                st.session_state.logs.append(trade_info)
-                logging.info(trade_info)
-        except Exception as e:
-            logging.error(f"Trading loop error: {e}")
-        time.sleep(1)
+    bot = st.session_state.bot
 
-# Dashboard tab
+    for _ in range(20):  # 20 cycles per click
+        if not st.session_state.running:
+            break
+
+        price = bot.get_price()
+        action = bot.decide(price)
+        bot.execute_trade(action, price)
+
+        st.session_state.prices.append(price)
+        log(f"Price={price} | Action={action}")
+
+        time.sleep(0.2)
+
+# ---------------------------------------------------------
+# UI Layout
+# ---------------------------------------------------------
 def dashboard_tab():
-    st.header("📊 Dashboard")
+    st.header("📈 Live Trading Dashboard")
 
     col1, col2 = st.columns(2)
-    with col1:
-        if st.button("▶️ Start Trading") and not st.session_state.running:
-            st.session_state.running = True
-            threading.Thread(target=run_trading_loop, daemon=True).start()
-    with col2:
-        if st.button("⏹ Stop Trading"):
-            st.session_state.running = False
+    col1.metric("Balance", f"${st.session_state.bot.balance:.2f}")
+    col2.metric("Last Price", st.session_state.bot.last_price)
 
-    st.subheader("Live Trades")
-    if st.session_state.logs:
-        df = pd.DataFrame(st.session_state.logs)
+    if st.button("Start Trading"):
+        st.session_state.running = True
+        run_trading_loop()
+
+    if st.button("Stop Trading"):
+        st.session_state.running = False
+
+    st.line_chart(st.session_state.prices)
+
+def trades_tab():
+    st.header("📜 Trade History")
+
+    df = pd.DataFrame(st.session_state.bot.trade_history)
+    if df.empty:
+        st.info("No trades yet.")
+    else:
         st.dataframe(df)
 
-        # Quick metrics
-        st.metric("Total Trades", len(df))
-        st.metric("Last Action", df["action"].iloc[-1])
-        st.metric("Latest Price", round(df["latest_price"].iloc[-1], 2))
+        csv = df.to_csv(index=False)
+        st.download_button("Download CSV", csv, "trades.csv")
 
-        # CSV export
-        csv = df.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            label="⬇️ Download Trades CSV",
-            data=csv,
-            file_name="trades.csv",
-            mime="text/csv"
-        )
-    else:
-        st.info("No trades yet. Start trading to see activity.")
-
-# Logs tab
 def logs_tab():
-    st.header("📝 Logs")
-    try:
-        with open("sai_app.log", "r") as f:
-            st.text(f.read())
-    except FileNotFoundError:
-        st.warning("No log file found yet.")
+    st.header("🧾 Logs")
+    st.text("\n".join(st.session_state.logs[-200:]))
 
-# Main app
+# ---------------------------------------------------------
+# Main App
+# ---------------------------------------------------------
 def main():
-    st.title("SAI Trading Bot Dashboard")
+    st.set_page_config(page_title="SAI Trading Bot", layout="wide")
+    init_state()
 
-    tab = st.sidebar.radio("Navigation", ["Dashboard", "Logs"])
-    if tab == "Dashboard":
+    tabs = st.tabs(["Dashboard", "Trades", "Logs"])
+
+    with tabs[0]:
         dashboard_tab()
-    elif tab == "Logs":
+
+    with tabs[1]:
+        trades_tab()
+
+    with tabs[2]:
         logs_tab()
 
 if __name__ == "__main__":

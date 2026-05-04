@@ -1,167 +1,199 @@
 import streamlit as st
 import threading
 import time
-import json
+import csv
+import os
+import random
+from datetime import datetime
 
 # ---------------------------------------------------------
-# Imports from your SAI modules
+# Minimal TradingBot (self-contained)
 # ---------------------------------------------------------
-
-from sai.broker.simulated_broker import SimulatedBroker
-from sai.core.metrics import RollingMetrics
-from sai.core.performance import PerformanceSnapshot
-from sai.core.equity_chart import EquityCurveASCII
-
-
-# ---------------------------------------------------------
-# Inline Trading Engine (no engine.py required)
-# ---------------------------------------------------------
-class InlineTradingEngine:
+class TradingBot:
     def __init__(self):
-        self.model = SimpleModel()
-        self.broker = SimulatedBroker()
-        self.metrics = RollingMetrics()
-        self.snapshot = PerformanceSnapshot()
-        self.chart = EquityCurveASCII()
-        self.cycle = 0
+        self.position = 0
+        self.balance = 1000
 
-    def run_cycle(self):
-        self.cycle += 1
+    def get_price(self):
+        return round(100 + random.uniform(-1, 1), 4)
 
-        price = self.broker.get_price()
-        signal = self.model.predict(price)
-        position, pnl, balance = self.broker.execute(signal)
+    def step(self, price):
+        action = random.choice(["BUY", "SELL", "HOLD"])
+        trade = None
 
-        snap = self.snapshot.log(
-            cycle=self.cycle,
-            price=price,
-            signal=signal,
-            position=position,
-            pnl=pnl,
-            balance=balance
+        if action == "BUY":
+            self.position += 1
+            self.balance -= price
+            trade = price
+
+        elif action == "SELL" and self.position > 0:
+            self.position -= 1
+            self.balance += price
+            trade = price
+
+        return action, trade
+
+
+# ---------------------------------------------------------
+# Metrics tracker
+# ---------------------------------------------------------
+class Metrics:
+    def __init__(self):
+        self.prices = []
+        self.actions = []
+        self.trades = []
+        self.balance = 1000
+        self.pnl = 0
+
+    def update(self, price, action, trade, bot):
+        self.prices.append(price)
+        self.actions.append(action)
+        self.trades.append(trade)
+        self.balance = bot.balance
+        self.pnl = bot.balance - 1000
+
+    def snapshot(self):
+        return {
+            "last_price": self.prices[-1] if self.prices else None,
+            "last_action": self.actions[-1] if self.actions else None,
+            "balance": self.balance,
+            "pnl": self.pnl,
+        }
+
+
+# ---------------------------------------------------------
+# CSV Exporter
+# ---------------------------------------------------------
+class CSVExporter:
+    def __init__(self, filename="trades.csv"):
+        self.filename = filename
+        self._ensure_file()
+
+    def _ensure_file(self):
+        if not os.path.exists(self.filename):
+            with open(self.filename, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(["timestamp", "price", "action", "trade", "balance", "pnl"])
+
+    def write_row(self, row):
+        with open(self.filename, "a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                row["timestamp"],
+                row["price"],
+                row["action"],
+                row["trade"],
+                row["balance"],
+                row["pnl"],
+            ])
+
+
+# ---------------------------------------------------------
+# Core Loop (self-contained)
+# ---------------------------------------------------------
+class CoreLoop:
+    def __init__(self, bot, metrics, csv_exporter, sleep_time=1.0):
+        self.bot = bot
+        self.metrics = metrics
+        self.csv_exporter = csv_exporter
+        self.sleep_time = sleep_time
+        self.running = False
+
+    def start(self, ui_callback=None):
+        self.running = True
+
+        while self.running:
+            try:
+                price = self.bot.get_price()
+                action, trade = self.bot.step(price)
+
+                self.metrics.update(price, action, trade, self.bot)
+
+                self.csv_exporter.write_row({
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "price": price,
+                    "action": action,
+                    "trade": trade,
+                    "balance": self.metrics.balance,
+                    "pnl": self.metrics.pnl,
+                })
+
+                if ui_callback:
+                    ui_callback()
+
+                time.sleep(self.sleep_time)
+
+            except Exception as e:
+                print("Loop error:", e)
+                time.sleep(1)
+
+    def stop(self):
+        self.running = False
+
+
+# ---------------------------------------------------------
+# Streamlit UI
+# ---------------------------------------------------------
+st.set_page_config(page_title="SAI Trading Dashboard", layout="wide")
+
+st.title("SAI Trading Dashboard (Standalone Version)")
+
+if "bot" not in st.session_state:
+    st.session_state.bot = TradingBot()
+
+if "metrics" not in st.session_state:
+    st.session_state.metrics = Metrics()
+
+if "csv" not in st.session_state:
+    st.session_state.csv = CSVExporter()
+
+if "loop" not in st.session_state:
+    st.session_state.loop = None
+
+
+# ---------------------------------------------------------
+# UI Callback
+# ---------------------------------------------------------
+def update_ui():
+    snap = st.session_state.metrics.snapshot()
+    st.session_state.last_price = snap["last_price"]
+    st.session_state.last_action = snap["last_action"]
+    st.session_state.balance = snap["balance"]
+    st.session_state.pnl = snap["pnl"]
+
+
+# ---------------------------------------------------------
+# Controls
+# ---------------------------------------------------------
+col1, col2 = st.columns(2)
+
+if col1.button("Start Trading"):
+    if st.session_state.loop is None or not st.session_state.loop.running:
+        st.session_state.loop = CoreLoop(
+            st.session_state.bot,
+            st.session_state.metrics,
+            st.session_state.csv,
+            sleep_time=1.0
         )
+        threading.Thread(
+            target=st.session_state.loop.start,
+            args=(update_ui,),
+            daemon=True
+        ).start()
 
-        metrics = self.metrics.update(balance)
-        chart = self.chart.update(balance)
-
-        return snap, metrics, chart
-
-
-# ---------------------------------------------------------
-# Initialize Streamlit Session State
-# ---------------------------------------------------------
-def init_state():
-    if "engine" not in st.session_state:
-        st.session_state.engine = InlineTradingEngine()
-
-    if "running" not in st.session_state:
-        st.session_state.running = False
-
-    if "logs" not in st.session_state:
-        st.session_state.logs = []
-
-    if "last_snapshot" not in st.session_state:
-        st.session_state.last_snapshot = None
-
-    if "last_metrics" not in st.session_state:
-        st.session_state.last_metrics = None
-
-    if "last_chart" not in st.session_state:
-        st.session_state.last_chart = None
+if col2.button("Stop Trading"):
+    if st.session_state.loop:
+        st.session_state.loop.stop()
 
 
 # ---------------------------------------------------------
-# Background Trading Thread
+# Live Metrics Display
 # ---------------------------------------------------------
-def trading_loop():
-    while st.session_state.running:
-        snap, metrics, chart = st.session_state.engine.run_cycle()
+st.subheader("Live Metrics")
 
-        st.session_state.last_snapshot = snap
-        st.session_state.last_metrics = metrics
-        st.session_state.last_chart = chart
+st.metric("Last Price", st.session_state.get("last_price", "—"))
+st.metric("Last Action", st.session_state.get("last_action", "—"))
+st.metric("Balance", st.session_state.get("balance", "—"))
+st.metric("PnL", st.session_state.get("pnl", "—"))
 
-        st.session_state.logs.append(
-            f"[{snap['cycle']}] Price={snap['price']} "
-            f"Signal={snap['signal']} PnL={snap['pnl']} "
-            f"Bal={snap['balance']}"
-        )
-
-        time.sleep(0.5)
-
-
-# ---------------------------------------------------------
-# Dashboard Tab
-# ---------------------------------------------------------
-def dashboard_tab():
-    st.header("📊 SAI Live Dashboard")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        if st.button("Start Trading"):
-            if not st.session_state.running:
-                st.session_state.running = True
-                threading.Thread(target=trading_loop, daemon=True).start()
-
-        if st.button("Stop Trading"):
-            st.session_state.running = False
-
-    with col2:
-        st.write("Status:", "🟢 Running" if st.session_state.running else "🔴 Stopped")
-
-    st.subheader("Latest Snapshot")
-    st.json(st.session_state.last_snapshot or {})
-
-    st.subheader("Rolling Metrics")
-    st.json(st.session_state.last_metrics or {})
-
-    st.subheader("Equity Curve (ASCII)")
-    st.code(st.session_state.last_chart or "(waiting…)")
-
-
-# ---------------------------------------------------------
-# Logs Tab
-# ---------------------------------------------------------
-def logs_tab():
-    st.header("📜 Logs")
-    st.text("\n".join(st.session_state.logs[-200:]))
-
-
-# ---------------------------------------------------------
-# Strategy Tab
-# ---------------------------------------------------------
-def strategy_tab():
-    st.header("⚙ Strategy Config")
-    st.write("This version uses SimpleModel(). Strategy plugin loader coming soon.")
-
-
-# ---------------------------------------------------------
-# Debug Tab
-# ---------------------------------------------------------
-def debug_tab():
-    st.header("🛠 Debug")
-    st.code(json.dumps(dict(st.session_state), indent=2))
-
-
-# ---------------------------------------------------------
-# Main App
-# ---------------------------------------------------------
-def main():
-    st.set_page_config(page_title="SAI Trading Bot", layout="wide")
-    init_state()
-
-    tabs = st.tabs(["Dashboard", "Logs", "Strategy", "Debug"])
-
-    with tabs[0]:
-        dashboard_tab()
-    with tabs[1]:
-        logs_tab()
-    with tabs[2]:
-        strategy_tab()
-    with tabs[3]:
-        debug_tab()
-
-
-if __name__ == "__main__":
-    main()
+st.line_chart(st.session_state.metrics.prices)

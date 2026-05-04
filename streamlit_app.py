@@ -25,7 +25,6 @@ class TradingBot:
             self.position += 1
             self.balance -= price
             trade = price
-
         elif action == "SELL" and self.position > 0:
             self.position -= 1
             self.balance += price
@@ -203,11 +202,9 @@ with tab_dashboard:
     prices_for_chart = st.session_state.get("_prices_for_chart", [])
     st.line_chart(prices_for_chart)
 
+    # Proper auto-refresh using Streamlit's built-in function
     if auto_refresh:
-        st_autorefresh = st.experimental_rerun  # fallback for compatibility
-        st_autorefresh = st.autorefresh if hasattr(st, "autorefresh") else None
-        if st_autorefresh:
-            st_autorefresh(interval=int(refresh_interval * 1000), key="refresh")
+        st.experimental_autorefresh(interval=int(refresh_interval * 1000), key="refresh")
 
 # ---------------------------------------------------------
 # Strategy Tab

@@ -1,15 +1,19 @@
+# sai/streamlit_app.py
 import streamlit as st
 import threading
 import time
 import logging
-from sai.core.engine import Sai   # imports your own class
+import pandas as pd
+from sai.core.engine import Sai   # ✅ your custom trading engine
 
+# Configure logging
 logging.basicConfig(
     filename="sai_app.log",
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
+# Initialize session state
 if "bot" not in st.session_state:
     st.session_state.bot = Sai()
 if "running" not in st.session_state:
@@ -17,6 +21,7 @@ if "running" not in st.session_state:
 if "logs" not in st.session_state:
     st.session_state.logs = []
 
+# Background trading loop
 def run_trading_loop():
     while st.session_state.running:
         try:
@@ -28,53 +33,58 @@ def run_trading_loop():
             logging.error(f"Trading loop error: {e}")
         time.sleep(1)
 
+# Dashboard tab
 def dashboard_tab():
     st.header("📊 Dashboard")
-    if st.button("Start Trading") and not st.session_state.running:
-        st.session_state.running = True
-        threading.Thread(target=run_trading_loop, daemon=True).start()
-    if st.button("Stop Trading"):
-        st.session_state.running = False
 
-    st.metric("Balance", f"${st.session_state.bot.balance:.2f}")
-    st.metric("Open Trades", len(st.session_state.bot.open_trades))
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("▶️ Start Trading") and not st.session_state.running:
+            st.session_state.running = True
+            threading.Thread(target=run_trading_loop, daemon=True).start()
+    with col2:
+        if st.button("⏹ Stop Trading"):
+            st.session_state.running = False
 
-def strategy_config_tab():
-    st.header("⚙️ Strategy Config")
-    risk = st.slider("Risk Level", 1, 10, st.session_state.bot.risk)
-    st.session_state.bot.risk = risk
-    st.write("Strategy updated.")
+    st.subheader("Live Trades")
+    if st.session_state.logs:
+        df = pd.DataFrame(st.session_state.logs)
+        st.dataframe(df)
 
+        # Quick metrics
+        st.metric("Total Trades", len(df))
+        st.metric("Last Action", df["action"].iloc[-1])
+        st.metric("Latest Price", round(df["latest_price"].iloc[-1], 2))
+
+        # CSV export
+        csv = df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="⬇️ Download Trades CSV",
+            data=csv,
+            file_name="trades.csv",
+            mime="text/csv"
+        )
+    else:
+        st.info("No trades yet. Start trading to see activity.")
+
+# Logs tab
 def logs_tab():
     st.header("📝 Logs")
-    for log in st.session_state.logs[-50:]:
-        st.text(log)
+    try:
+        with open("sai_app.log", "r") as f:
+            st.text(f.read())
+    except FileNotFoundError:
+        st.warning("No log file found yet.")
 
-def model_testing_tab():
-    st.header("🧪 Model Testing")
-    st.write("Placeholder for ML model evaluation.")
-
-def debug_tab():
-    st.header("🐞 Debug")
-    st.write("Session State:", st.session_state)
-
+# Main app
 def main():
-    st.title("SAI Trading Bot")
-    tab = st.sidebar.radio(
-        "Navigation",
-        ["Dashboard", "Strategy Config", "Logs", "Model Testing", "Debug"]
-    )
+    st.title("SAI Trading Bot Dashboard")
 
+    tab = st.sidebar.radio("Navigation", ["Dashboard", "Logs"])
     if tab == "Dashboard":
         dashboard_tab()
-    elif tab == "Strategy Config":
-        strategy_config_tab()
     elif tab == "Logs":
         logs_tab()
-    elif tab == "Model Testing":
-        model_testing_tab()
-    elif tab == "Debug":
-        debug_tab()
 
 if __name__ == "__main__":
     main()

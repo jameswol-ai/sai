@@ -187,7 +187,7 @@ with tab_dashboard:
         if st.session_state.loop:
             st.session_state.loop.stop()
 
-    auto_refresh = col3.checkbox("Auto-refresh UI", value=True)
+    auto_refresh = col3.checkbox("Auto-refresh UI", value=False)
     refresh_interval = col3.number_input(
         "Refresh interval (s)", min_value=0.5, max_value=10.0, value=1.0, step=0.5
     )
@@ -204,9 +204,7 @@ with tab_dashboard:
     prices_for_chart = st.session_state.get("_prices_for_chart", [])
     st.line_chart(prices_for_chart)
 
-    # Proper auto-refresh using Streamlit's built-in function
-    if auto_refresh:
-        st.experimental_autorefresh(interval=int(refresh_interval * 1000), key="refresh")
+    st.write("Manual refresh only — use the Streamlit rerun button or restart trading to update metrics.")
 
 # ---------------------------------------------------------
 # Strategy Tab

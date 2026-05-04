@@ -1,4 +1,5 @@
 import random
+import sai
 
 def get_data():
     """Simulate fetching a price feed (replace with real API)."""

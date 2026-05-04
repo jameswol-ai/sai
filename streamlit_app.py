@@ -35,10 +35,11 @@ class TradingBot:
 
 
 # ---------------------------------------------------------
-# Metrics tracker
+# Metrics tracker (thread-safe)
 # ---------------------------------------------------------
 class Metrics:
     def __init__(self):
+        self._lock = threading.Lock()
         self.prices = []
         self.actions = []
         self.trades = []
@@ -46,27 +47,31 @@ class Metrics:
         self.pnl = 0
 
     def update(self, price, action, trade, bot):
-        self.prices.append(price)
-        self.actions.append(action)
-        self.trades.append(trade)
-        self.balance = bot.balance
-        self.pnl = bot.balance - 1000
+        with self._lock:
+            self.prices.append(price)
+            self.actions.append(action)
+            self.trades.append(trade)
+            self.balance = bot.balance
+            self.pnl = bot.balance - 1000
 
     def snapshot(self):
-        return {
-            "last_price": self.prices[-1] if self.prices else None,
-            "last_action": self.actions[-1] if self.actions else None,
-            "balance": self.balance,
-            "pnl": self.pnl,
-        }
+        with self._lock:
+            return {
+                "last_price": self.prices[-1] if self.prices else None,
+                "last_action": self.actions[-1] if self.actions else None,
+                "balance": self.balance,
+                "pnl": self.pnl,
+                "prices": list(self.prices),  # return a copy for safe iteration
+            }
 
 
 # ---------------------------------------------------------
-# CSV Exporter
+# CSV Exporter (thread-safe)
 # ---------------------------------------------------------
 class CSVExporter:
     def __init__(self, filename="trades.csv"):
         self.filename = filename
+        self._lock = threading.Lock()
         self._ensure_file()
 
     def _ensure_file(self):
@@ -76,20 +81,21 @@ class CSVExporter:
                 writer.writerow(["timestamp", "price", "action", "trade", "balance", "pnl"])
 
     def write_row(self, row):
-        with open(self.filename, "a", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow([
-                row["timestamp"],
-                row["price"],
-                row["action"],
-                row["trade"],
-                row["balance"],
-                row["pnl"],
-            ])
+        with self._lock:
+            with open(self.filename, "a", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    row["timestamp"],
+                    row["price"],
+                    row["action"],
+                    row["trade"],
+                    row["balance"],
+                    row["pnl"],
+                ])
 
 
 # ---------------------------------------------------------
-# Core Loop (self-contained)
+# Core Loop (background thread)
 # ---------------------------------------------------------
 class CoreLoop:
     def __init__(self, bot, metrics, csv_exporter, sleep_time=1.0):
@@ -99,16 +105,17 @@ class CoreLoop:
         self.sleep_time = sleep_time
         self.running = False
 
-    def start(self, ui_callback=None):
+    def start(self):
         self.running = True
-
         while self.running:
             try:
                 price = self.bot.get_price()
                 action, trade = self.bot.step(price)
 
+                # Update metrics (thread-safe)
                 self.metrics.update(price, action, trade, self.bot)
 
+                # Write CSV (thread-safe)
                 self.csv_exporter.write_row({
                     "timestamp": datetime.utcnow().isoformat(),
                     "price": price,
@@ -117,9 +124,6 @@ class CoreLoop:
                     "balance": self.metrics.balance,
                     "pnl": self.metrics.pnl,
                 })
-
-                if ui_callback:
-                    ui_callback()
 
                 time.sleep(self.sleep_time)
 
@@ -135,7 +139,6 @@ class CoreLoop:
 # Streamlit UI Setup
 # ---------------------------------------------------------
 st.set_page_config(page_title="SAI Trading Dashboard", layout="wide")
-
 st.title("SAI Trading Dashboard (Standalone Multi‑Tab Version)")
 
 if "bot" not in st.session_state:
@@ -150,17 +153,14 @@ if "csv" not in st.session_state:
 if "loop" not in st.session_state:
     st.session_state.loop = None
 
-
-# ---------------------------------------------------------
-# UI Callback
-# ---------------------------------------------------------
-def update_ui():
+# UI helper: read snapshot and write to session_state in UI thread only
+def update_ui_from_metrics():
     snap = st.session_state.metrics.snapshot()
     st.session_state.last_price = snap["last_price"]
     st.session_state.last_action = snap["last_action"]
     st.session_state.balance = snap["balance"]
     st.session_state.pnl = snap["pnl"]
-
+    st.session_state._prices_for_chart = snap["prices"]
 
 # ---------------------------------------------------------
 # Tabs
@@ -175,7 +175,7 @@ tab_dashboard, tab_strategy, tab_logs, tab_debug = st.tabs(
 with tab_dashboard:
     st.subheader("Live Trading Controls")
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns([1, 1, 1])
 
     if col1.button("Start Trading"):
         if st.session_state.loop is None or not st.session_state.loop.running:
@@ -187,13 +187,18 @@ with tab_dashboard:
             )
             threading.Thread(
                 target=st.session_state.loop.start,
-                args=(update_ui,),
                 daemon=True
             ).start()
 
     if col2.button("Stop Trading"):
         if st.session_state.loop:
             st.session_state.loop.stop()
+
+    auto_refresh = col3.checkbox("Auto-refresh UI", value=True)
+    refresh_interval = col3.number_input("Refresh interval (s)", min_value=0.5, max_value=10.0, value=1.0, step=0.5)
+
+    # Update UI values from metrics snapshot (UI thread)
+    update_ui_from_metrics()
 
     st.subheader("Live Metrics")
     st.metric("Last Price", st.session_state.get("last_price", "—"))
@@ -202,7 +207,18 @@ with tab_dashboard:
     st.metric("PnL", st.session_state.get("pnl", "—"))
 
     st.subheader("Price Chart")
-    st.line_chart(st.session_state.metrics.prices)
+    prices_for_chart = st.session_state.get("_prices_for_chart", [])
+    st.line_chart(prices_for_chart)
+
+    # Manual refresh button
+    if st.button("Refresh now"):
+        st.experimental_rerun()
+
+    # Simple auto-refresh: re-run the app after sleep in the UI thread
+    if auto_refresh:
+        # Sleep briefly then rerun so UI updates from background thread are shown.
+        time.sleep(refresh_interval)
+        st.experimental_rerun()
 
 
 # ---------------------------------------------------------
@@ -213,23 +229,29 @@ with tab_strategy:
     st.write("This tab will later support strategy plugins, parameters, and model selection.")
     st.text_area("Strategy Notes", placeholder="Describe or configure your strategy here...")
 
-
 # ---------------------------------------------------------
 # Logs Tab
 # ---------------------------------------------------------
 with tab_logs:
     st.subheader("CSV Log Preview")
 
-    if os.path.exists("trades.csv"):
-        with open("trades.csv", "r") as f:
-            st.download_button("Download trades.csv", f, file_name="trades.csv")
+    if os.path.exists(st.session_state.csv.filename):
+        # Show download button using a fresh file read
+        with open(st.session_state.csv.filename, "rb") as f:
+            data = f.read()
+            st.download_button("Download trades.csv", data, file_name="trades.csv")
+
         st.write("Latest 20 rows:")
-        with open("trades.csv", "r") as f:
+        with open(st.session_state.csv.filename, "r", newline="") as f:
             rows = list(csv.reader(f))
-            st.table(rows[-20:])
+            header = rows[0] if rows else []
+            body = rows[-20:] if len(rows) > 1 else []
+            if header:
+                st.table([header] + body)
+            else:
+                st.write("No rows yet.")
     else:
         st.write("No logs yet.")
-
 
 # ---------------------------------------------------------
 # Debug Tab
@@ -237,7 +259,7 @@ with tab_logs:
 with tab_debug:
     st.subheader("Debug Info")
     st.json({
-        "loop_running": st.session_state.loop.running if st.session_state.loop else False,
+        "loop_running": bool(st.session_state.loop.running) if st.session_state.loop else False,
         "last_price": st.session_state.get("last_price"),
         "last_action": st.session_state.get("last_action"),
         "balance": st.session_state.get("balance"),

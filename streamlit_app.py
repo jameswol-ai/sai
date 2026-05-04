@@ -6,29 +6,6 @@ import os
 import random
 from datetime import datetime
 
-from engine.core_loop import SaiCoreLoop
-
-if st.button("Start Trading"):
-    if "loop" not in st.session_state:
-        st.session_state.loop = SaiCoreLoop(
-            bot=st.session_state.bot,
-            metrics=st.session_state.metrics,
-            csv_exporter=st.session_state.csv_exporter,
-            sleep_time=1.0
-        )
-
-    def ui_update(price, action, trade, metrics):
-        st.session_state.last_price = price
-        st.session_state.last_action = action
-        st.session_state.last_trade = trade
-        st.session_state.metrics_snapshot = metrics.snapshot()
-
-    threading.Thread(
-        target=st.session_state.loop.start,
-        args=(ui_update,),
-        daemon=True
-    ).start()
-
 # ---------------------------------------------------------
 # Minimal TradingBot (self-contained)
 # ---------------------------------------------------------
@@ -155,11 +132,11 @@ class CoreLoop:
 
 
 # ---------------------------------------------------------
-# Streamlit UI
+# Streamlit UI Setup
 # ---------------------------------------------------------
 st.set_page_config(page_title="SAI Trading Dashboard", layout="wide")
 
-st.title("SAI Trading Dashboard (Standalone Version)")
+st.title("SAI Trading Dashboard (Standalone Multi‑Tab Version)")
 
 if "bot" not in st.session_state:
     st.session_state.bot = TradingBot()
@@ -186,37 +163,84 @@ def update_ui():
 
 
 # ---------------------------------------------------------
-# Controls
+# Tabs
 # ---------------------------------------------------------
-col1, col2 = st.columns(2)
-
-if col1.button("Start Trading"):
-    if st.session_state.loop is None or not st.session_state.loop.running:
-        st.session_state.loop = CoreLoop(
-            st.session_state.bot,
-            st.session_state.metrics,
-            st.session_state.csv,
-            sleep_time=1.0
-        )
-        threading.Thread(
-            target=st.session_state.loop.start,
-            args=(update_ui,),
-            daemon=True
-        ).start()
-
-if col2.button("Stop Trading"):
-    if st.session_state.loop:
-        st.session_state.loop.stop()
-
+tab_dashboard, tab_strategy, tab_logs, tab_debug = st.tabs(
+    ["📊 Dashboard", "🧠 Strategy", "📜 Logs", "🛠 Debug"]
+)
 
 # ---------------------------------------------------------
-# Live Metrics Display
+# Dashboard Tab
 # ---------------------------------------------------------
-st.subheader("Live Metrics")
+with tab_dashboard:
+    st.subheader("Live Trading Controls")
 
-st.metric("Last Price", st.session_state.get("last_price", "—"))
-st.metric("Last Action", st.session_state.get("last_action", "—"))
-st.metric("Balance", st.session_state.get("balance", "—"))
-st.metric("PnL", st.session_state.get("pnl", "—"))
+    col1, col2 = st.columns(2)
 
-st.line_chart(st.session_state.metrics.prices)
+    if col1.button("Start Trading"):
+        if st.session_state.loop is None or not st.session_state.loop.running:
+            st.session_state.loop = CoreLoop(
+                st.session_state.bot,
+                st.session_state.metrics,
+                st.session_state.csv,
+                sleep_time=1.0
+            )
+            threading.Thread(
+                target=st.session_state.loop.start,
+                args=(update_ui,),
+                daemon=True
+            ).start()
+
+    if col2.button("Stop Trading"):
+        if st.session_state.loop:
+            st.session_state.loop.stop()
+
+    st.subheader("Live Metrics")
+    st.metric("Last Price", st.session_state.get("last_price", "—"))
+    st.metric("Last Action", st.session_state.get("last_action", "—"))
+    st.metric("Balance", st.session_state.get("balance", "—"))
+    st.metric("PnL", st.session_state.get("pnl", "—"))
+
+    st.subheader("Price Chart")
+    st.line_chart(st.session_state.metrics.prices)
+
+
+# ---------------------------------------------------------
+# Strategy Tab
+# ---------------------------------------------------------
+with tab_strategy:
+    st.subheader("Strategy Configuration (Placeholder)")
+    st.write("This tab will later support strategy plugins, parameters, and model selection.")
+    st.text_area("Strategy Notes", placeholder="Describe or configure your strategy here...")
+
+
+# ---------------------------------------------------------
+# Logs Tab
+# ---------------------------------------------------------
+with tab_logs:
+    st.subheader("CSV Log Preview")
+
+    if os.path.exists("trades.csv"):
+        with open("trades.csv", "r") as f:
+            st.download_button("Download trades.csv", f, file_name="trades.csv")
+        st.write("Latest 20 rows:")
+        with open("trades.csv", "r") as f:
+            rows = list(csv.reader(f))
+            st.table(rows[-20:])
+    else:
+        st.write("No logs yet.")
+
+
+# ---------------------------------------------------------
+# Debug Tab
+# ---------------------------------------------------------
+with tab_debug:
+    st.subheader("Debug Info")
+    st.json({
+        "loop_running": st.session_state.loop.running if st.session_state.loop else False,
+        "last_price": st.session_state.get("last_price"),
+        "last_action": st.session_state.get("last_action"),
+        "balance": st.session_state.get("balance"),
+        "pnl": st.session_state.get("pnl"),
+        "total_prices": len(st.session_state.metrics.prices),
+    })

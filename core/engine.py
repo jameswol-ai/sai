@@ -2,6 +2,7 @@
 
 from sai.core.performance import PerformanceSnapshot
 from sai.core.metrics import RollingMetrics
+from sai.core.equity_chart import EquityCurveASCII
 
 class TradingEngine:
     def __init__(self, model, broker):
@@ -84,3 +85,33 @@ class TradingEngine:
         metrics = self.metrics.update(balance)
 
         return snap, metrics
+
+class TradingEngine:
+    def __init__(self, model, broker):
+        self.model = model
+        self.broker = broker
+        self.cycle = 0
+        self.snapshot = PerformanceSnapshot()
+        self.metrics = RollingMetrics()
+        self.chart = EquityCurveASCII()
+
+    def run_cycle(self):
+        self.cycle += 1
+
+        price = self.broker.get_price()
+        signal = self.model.predict(price)
+        position, pnl, balance = self.broker.execute(signal)
+
+        snap = self.snapshot.log(
+            cycle=self.cycle,
+            price=price,
+            signal=signal,
+            position=position,
+            pnl=pnl,
+            balance=balance
+        )
+
+        metrics = self.metrics.update(balance)
+        chart = self.chart.update(balance)
+
+        return snap, metrics, chart

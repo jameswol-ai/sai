@@ -187,7 +187,7 @@ with tab_dashboard:
         if st.session_state.loop:
             st.session_state.loop.stop()
 
-    auto_refresh = col3.checkbox("Auto-refresh UI", value=False)
+    auto_refresh = col3.checkbox("Auto-refresh UI (disabled)", value=False)
     refresh_interval = col3.number_input(
         "Refresh interval (s)", min_value=0.5, max_value=10.0, value=1.0, step=0.5
     )
@@ -204,49 +204,14 @@ with tab_dashboard:
     prices_for_chart = st.session_state.get("_prices_for_chart", [])
     st.line_chart(prices_for_chart)
 
-    st.write("Manual refresh only — use the Streamlit rerun button or restart trading to update metrics.")
+    # Manual refresh button
+    if st.button("Refresh Now"):
+        update_ui_from_metrics()
+        st.experimental_rerun()
 
 # ---------------------------------------------------------
 # Strategy Tab
 # ---------------------------------------------------------
 with tab_strategy:
     st.subheader("Strategy Configuration (Placeholder)")
-    st.write("This tab will later support strategy plugins, parameters, and model selection.")
-    st.text_area("Strategy Notes", placeholder="Describe or configure your strategy here...")
-
-# ---------------------------------------------------------
-# Logs Tab
-# ---------------------------------------------------------
-with tab_logs:
-    st.subheader("CSV Log Preview")
-
-    if os.path.exists(st.session_state.csv.filename):
-        with open(st.session_state.csv.filename, "rb") as f:
-            data = f.read()
-            st.download_button("Download trades.csv", data, file_name="trades.csv")
-
-        st.write("Latest 20 rows:")
-        with open(st.session_state.csv.filename, "r", newline="") as f:
-            rows = list(csv.reader(f))
-            header = rows[0] if rows else []
-            body = rows[-20:] if len(rows) > 1 else []
-            if header:
-                st.table([header] + body)
-            else:
-                st.write("No rows yet.")
-    else:
-        st.write("No logs yet.")
-
-# ---------------------------------------------------------
-# Debug Tab
-# ---------------------------------------------------------
-with tab_debug:
-    st.subheader("Debug Info")
-    st.json({
-        "loop_running": bool(st.session_state.loop.running) if st.session_state.loop else False,
-        "last_price": st.session_state.get("last_price"),
-        "last_action": st.session_state.get("last_action"),
-        "balance": st.session_state.get("balance"),
-        "pnl": st.session_state.get("pnl"),
-        "total_prices": len(st.session_state.metrics.prices),
-    })
+    st.write("This tab will later support strategy plugins, parameters, and model selection over time?

@@ -1,15 +1,17 @@
 import random
 import sai
 
-snap = engine.run_cycle()
+snap, metrics = engine.run_cycle()
 
 print(
     f"[{snap['cycle']}] "
     f"Price: {snap['price']} | "
     f"Signal: {snap['signal']} | "
-    f"Pos: {snap['position']} | "
     f"PnL: {snap['pnl']} | "
-    f"Bal: {snap['balance']}"
+    f"Bal: {snap['balance']} | "
+    f"Sharpe: {metrics['sharpe']} | "
+    f"WinRate: {metrics['win_rate']} | "
+    f"DD: {metrics['max_drawdown']}"
 )
 
 def get_data():

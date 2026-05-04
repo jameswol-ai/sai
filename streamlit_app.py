@@ -1,4 +1,9 @@
 # sai/streamlit_app.py
+
+import os
+print("Working directory:", os.getcwd())
+print("FILESYSTEM:", os.listdir("/mount/src/sai"))
+print("CORE:", os.listdir("/mount/src/sai/core"))
 import streamlit as st
 import threading
 import time

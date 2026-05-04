@@ -1,6 +1,7 @@
 # sai/core/engine.py
 
 from sai.core.performance import PerformanceSnapshot
+from sai.core.metrics import RollingMetrics
 
 class TradingEngine:
     def __init__(self, model, broker):
@@ -55,3 +56,31 @@ class Sai:
             self.balance += (-25 if self._counter % 2 else 25)
             return f"Trade {trade['id']}: {trade['direction']} ${trade['amount']} | Balance: ${self.balance:.2f}"
         return None
+
+class TradingEngine:
+    def __init__(self, model, broker):
+        self.model = model
+        self.broker = broker
+        self.cycle = 0
+        self.snapshot = PerformanceSnapshot()
+        self.metrics = RollingMetrics()
+
+    def run_cycle(self):
+        self.cycle += 1
+
+        price = self.broker.get_price()
+        signal = self.model.predict(price)
+        position, pnl, balance = self.broker.execute(signal)
+
+        snap = self.snapshot.log(
+            cycle=self.cycle,
+            price=price,
+            signal=signal,
+            position=position,
+            pnl=pnl,
+            balance=balance
+        )
+
+        metrics = self.metrics.update(balance)
+
+        return snap, metrics

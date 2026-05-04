@@ -1,6 +1,16 @@
 import random
 import sai
 
+from engine.core_loop import SaiCoreLoop
+
+loop = SaiCoreLoop(bot, metrics, csv_exporter, sleep_time=1.0)
+
+try:
+    loop.start(on_update=None)
+except KeyboardInterrupt:
+    loop.stop()
+    print("Stopped by user")
+
 snap, metrics, chart = engine.run_cycle()
 
 print(

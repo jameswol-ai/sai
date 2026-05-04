@@ -188,7 +188,9 @@ with tab_dashboard:
             st.session_state.loop.stop()
 
     auto_refresh = col3.checkbox("Auto-refresh UI", value=True)
-    refresh_interval = col3.number_input("Refresh interval (s)", min_value=0.5, max_value=10.0, value=1.0, step=0.5)
+    refresh_interval = col3.number_input(
+        "Refresh interval (s)", min_value=0.5, max_value=10.0, value=1.0, step=0.5
+    )
 
     update_ui_from_metrics()
 

@@ -9,7 +9,7 @@ import threading
 import time
 import logging
 import pandas as pd
-from sai.core.engine import Sai   # ✅ your custom trading engine
+from sai.bot.maim import Sai
 
 # Configure logging
 logging.basicConfig(

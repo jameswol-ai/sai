@@ -6,6 +6,29 @@ import os
 import random
 from datetime import datetime
 
+from engine.core_loop import SaiCoreLoop
+
+if st.button("Start Trading"):
+    if "loop" not in st.session_state:
+        st.session_state.loop = SaiCoreLoop(
+            bot=st.session_state.bot,
+            metrics=st.session_state.metrics,
+            csv_exporter=st.session_state.csv_exporter,
+            sleep_time=1.0
+        )
+
+    def ui_update(price, action, trade, metrics):
+        st.session_state.last_price = price
+        st.session_state.last_action = action
+        st.session_state.last_trade = trade
+        st.session_state.metrics_snapshot = metrics.snapshot()
+
+    threading.Thread(
+        target=st.session_state.loop.start,
+        args=(ui_update,),
+        daemon=True
+    ).start()
+
 # ---------------------------------------------------------
 # Minimal TradingBot (self-contained)
 # ---------------------------------------------------------

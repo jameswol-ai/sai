@@ -6,7 +6,7 @@ import json
 # ---------------------------------------------------------
 # Imports from your SAI modules
 # ---------------------------------------------------------
-from sai.model.simple_model import SimpleModel
+
 from sai.broker.simulated_broker import SimulatedBroker
 from sai.core.metrics import RollingMetrics
 from sai.core.performance import PerformanceSnapshot

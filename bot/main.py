@@ -1,6 +1,17 @@
 import random
 import sai
 
+snap = engine.run_cycle()
+
+print(
+    f"[{snap['cycle']}] "
+    f"Price: {snap['price']} | "
+    f"Signal: {snap['signal']} | "
+    f"Pos: {snap['position']} | "
+    f"PnL: {snap['pnl']} | "
+    f"Bal: {snap['balance']}"
+)
+
 def get_data():
     """Simulate fetching a price feed (replace with real API)."""
     return round(100 + random.uniform(-1, 1), 2)

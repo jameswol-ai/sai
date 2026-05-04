@@ -3,6 +3,15 @@
 from sai.core.performance import PerformanceSnapshot
 from sai.core.metrics import RollingMetrics
 from sai.core.equity_chart import EquityCurveASCII
+from sai.broker.simulated_broker import SimulatedBroker
+
+broker = SimulatedBroker(
+    starting_balance=1000,
+    spread=0.02,
+    slippage_pct=0.0005,
+    latency_ms=80,
+    fill_probability=0.98
+)
 
 class TradingEngine:
     def __init__(self, model, broker):

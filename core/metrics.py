@@ -1,4 +1,5 @@
 import math
+import numpy as np
 
 class RollingMetrics:
     def __init__(self):

@@ -5,7 +5,6 @@ import threading
 import logging
 import http.server
 import socketserver
-import threading as th
 from prometheus_client import Gauge, CollectorRegistry, generate_latest
 
 # --- Logging Setup ---
@@ -24,20 +23,19 @@ tracker_gauge = Gauge("sai_tracker_completion", "Project tracker completion", re
 
 # --- Session State Defaults ---
 def init_defaults():
-    if "balance" not in st.session_state:
-        st.session_state.balance = 1000.0
-    if "pnl" not in st.session_state:
-        st.session_state.pnl = 0.0
-    if "last_price" not in st.session_state:
-        st.session_state.last_price = None
-    if "last_action" not in st.session_state:
-        st.session_state.last_action = None
-    if "running" not in st.session_state:
-        st.session_state.running = False
-    if "prices" not in st.session_state:
-        st.session_state.prices = []
-    if "tracker_completion" not in st.session_state:
-        st.session_state.tracker_completion = 0
+    defaults = {
+        "balance": 1000.0,
+        "pnl": 0.0,
+        "last_price": None,
+        "last_action": None,
+        "running": False,
+        "prices": [],
+        "tracker_completion": 0,
+        "metrics_server_started": False
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
 
 # --- Trading Loop ---
 def trading_loop(refresh):
@@ -74,9 +72,15 @@ class MetricsHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
+class ReusableTCPServer(socketserver.TCPServer):
+    allow_reuse_address = True
+
 def start_metrics_server(port=8000):
-    server = socketserver.TCPServer(("", port), MetricsHandler)
-    th.Thread(target=server.serve_forever, daemon=True).start()
+    if not st.session_state.metrics_server_started:
+        server = ReusableTCPServer(("", port), MetricsHandler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        st.session_state.metrics_server_started = True
+        st.write(f"✅ Prometheus metrics server running on port {port}")
 
 # --- Dashboard Tab ---
 def dashboard_tab():

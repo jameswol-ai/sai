@@ -19,7 +19,13 @@ jobs:
           python-version: "3.10"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt pytest pyyaml
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          elif [ -f sai/requirements.txt ]; then
+            pip install -r sai/requirements.txt
+          fi
+          pip install pytest pyyaml
 
       - name: Validate config
         run: python sai/scripts/validate_config.py
@@ -38,6 +44,9 @@ jobs:
         run: docker build -t my-bot:latest .
 
       - name: Push Docker image
+        env:
+          DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USER }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u ${{ secrets.DOCKERHUB_USER }} --password-stdin
+          echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USER" --password-stdin
           docker push my-bot:latest

@@ -1,103 +1,39 @@
-name: SAI Workflow Hardening
+# .github/workflows/ci.yml
+name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ main ]
+    branches: [ "main" ]
 
 jobs:
-  # ... lint-test, docker-build, monitoring-qa, gitops-sync as before ...
-
-  notify:
+  lint-test:
     runs-on: ubuntu-latest
-    needs: [gitops-sync]
     steps:
-      - name: Slack Notification
-        uses: slackapi/slack-github-action@v1.24.0
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          payload: |
-            {
-              "text": "SAI CI/CD Pipeline: ${{ job.status }} for commit ${{ github.sha }} on ${{ github.ref }}"
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          python-version: '3.11'
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Lint
+        run: flake8 .
+      - name: Type Check
+        run: mypy .
+      - name: Run Tests
+        run: pytest
 
-      - name: Email Notification
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ secrets.EMAIL_USERNAME }}
-          password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "SAI CI/CD Pipeline ${{ job.status }}"
-          to: "team@example.com"
-          from: "ci-bot@example.com"
-          body: |
-            The SAI pipeline has completed with status: ${{ job.status }}
-            Commit: ${{ github.sha }}
-            Branch: ${{ github.ref }}
-  docker-build:
-    runs-on: ubuntu-latest
+  docker-deploy:
     needs: lint-test
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build Docker image
-        run: docker build -t ghcr.io/your-org/sai:${{ github.sha }} .
-      - name: Push Docker image
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          docker push ghcr.io/your-org/sai:${{ github.sha }}
-
-  monitoring-qa:
     runs-on: ubuntu-latest
-    needs: docker-build
     steps:
-      - uses: actions/checkout@v4
-      - name: Validate Prometheus rules
-        run: promtool check rules prometheus/rules/*.yml
-      - name: Validate Grafana dashboards
-        run: for f in grafana/dashboards/*.json; do jq . "$f" > /dev/null; done
-      - name: Validate Kubernetes manifests
-        run: kubeval k8s/*.yaml
-
-  gitops-sync:
-    runs-on: ubuntu-latest
-    needs: monitoring-qa
-    steps:
-      - uses: actions/checkout@v4
-      - name: Commit infra changes
+      - uses: actions/checkout@v3
+      - name: Build Docker Image
+        run: docker build -t ghcr.io/your-org/sai-bot:${{ github.sha }} .
+      - name: Push Image
+        run: docker push ghcr.io/your-org/sai-bot:${{ github.sha }}
+      - name: ArgoCD Sync
         run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add infra/
-          git commit -m "GitOps sync: ${{ github.sha }}" || echo "No changes"
-          git push
-
-release-tag:
-    runs-on: ubuntu-latest
-    needs: gitops-sync
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Git
-        run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-      - name: Create version tag
-        run: |
-          VERSION="v$(date +'%Y.%m.%d')-${{ github.run_number }}"
-          git tag -a $VERSION -m "Release $VERSION for commit ${{ github.sha }}"
-          git push origin $VERSION
-
-  rollback:
-    runs-on: ubuntu-latest
-    if: failure()
-    needs: [lint-test, docker-build, monitoring-qa, gitops-sync]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Rollback to last stable tag
-        run: |
-          LAST_TAG=$(git describe --tags --abbrev=0)
-          echo "Rolling back to $LAST_TAG"
-          git reset --hard $LAST_TAG
-          git push --force origin HEAD
+          argocd app sync sai-bot --grpc-web

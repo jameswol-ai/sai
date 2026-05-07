@@ -45,3 +45,16 @@ spec:
       - name: exports-volume
         persistentVolumeClaim:
           claimName: sai-exports-pvc
+
+ volumes:
+- name: config-volume
+  configMap:
+    name: sai-config
+...
+containers:
+- name: streamlit-dashboard
+  image: sai-bot:latest
+  command: ["streamlit", "run", "streamlit_app.py", "--server.port=8501"]
+  envFrom:
+    - configMapRef:
+        name: sai-config         

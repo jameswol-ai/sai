@@ -1,0 +1,54 @@
+name: Monitoring CI
+
+on:
+  push:
+    paths:
+      - 'monitoring/**'
+    branches: [ main ]
+  pull_request:
+    paths:
+      - 'monitoring/**'
+
+jobs:
+  validate-prometheus:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Install Prometheus
+        run: |
+          curl -LO https://github.com/prometheus/prometheus/releases/download/v2.45.0/prometheus-2.45.0.linux-amd64.tar.gz
+          tar xvf prometheus-*.tar.gz
+          mv prometheus-*/promtool /usr/local/bin/promtool
+
+      - name: Validate Prometheus rules
+        run: promtool check rules monitoring/prometheus/alerting-rules.yaml
+
+  validate-grafana:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Validate Grafana JSON
+        run: |
+          jq empty monitoring/grafana/sai-dashboard-bundle.json
+
+  validate-k8s:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Install kubeval
+        run: |
+          curl -s https://api.github.com/repos/instrumenta/kubeval/releases/latest \
+          | grep "browser_download_url.*linux-amd64" \
+          | cut -d '"' -f 4 \
+          | wget -qi -
+          tar xf kubeval-*.tar.gz
+          mv kubeval /usr/local/bin/
+
+      - name: Validate Kubernetes manifests
+        run: kubeval monitoring/**/k8s-*.yaml

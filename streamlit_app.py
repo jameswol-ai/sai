@@ -1,6 +1,23 @@
 import streamlit as st
 import time
 import random
+import threading
+import logging
+from prometheus_client import Gauge, CollectorRegistry, generate_latest
+
+# --- Logging Setup ---
+logging.basicConfig(
+    filename="trading.log",
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s"
+)
+
+# --- Prometheus Metrics ---
+registry = CollectorRegistry()
+equity_gauge = Gauge("sai_equity", "Current equity", registry=registry)
+drawdown_gauge = Gauge("sai_drawdown", "Current drawdown", registry=registry)
+sharpe_gauge = Gauge("sai_sharpe", "Sharpe ratio", registry=registry)
+tracker_gauge = Gauge("sai_tracker_completion", "Project tracker completion", registry=registry)
 
 # --- Session State Defaults ---
 def init_defaults():
@@ -14,6 +31,33 @@ def init_defaults():
         st.session_state.last_action = None
     if "running" not in st.session_state:
         st.session_state.running = False
+    if "prices" not in st.session_state:
+        st.session_state.prices = []
+    if "tracker_completion" not in st.session_state:
+        st.session_state.tracker_completion = 0
+
+# --- Trading Loop ---
+def trading_loop(refresh):
+    while st.session_state.running:
+        price = round(random.uniform(90, 110), 2)
+        action = random.choice(["BUY", "SELL", "HOLD"])
+        pnl_change = random.uniform(-1, 1)
+
+        st.session_state.last_price = price
+        st.session_state.last_action = action
+        st.session_state.pnl += pnl_change
+        st.session_state.balance += pnl_change
+        st.session_state.prices.append(price)
+        st.session_state.tracker_completion = min(100, st.session_state.tracker_completion + random.uniform(0, 2))
+
+        # Update Prometheus metrics
+        equity_gauge.set(st.session_state.balance)
+        drawdown_gauge.set(max(0, (1000 - st.session_state.balance) / 1000))
+        sharpe_gauge.set(random.uniform(-1, 2))
+        tracker_gauge.set(st.session_state.tracker_completion)
+
+        logging.info(f"Price={price}, Action={action}, Balance={st.session_state.balance:.2f}, PnL={st.session_state.pnl:.2f}")
+        time.sleep(refresh)
 
 # --- Dashboard Tab ---
 def dashboard_tab():
@@ -24,6 +68,7 @@ def dashboard_tab():
     with col1:
         if st.button("▶️ Start Trading"):
             st.session_state.running = True
+            threading.Thread(target=trading_loop, args=(refresh,), daemon=True).start()
     with col2:
         if st.button("⏹ Stop Trading"):
             st.session_state.running = False
@@ -34,18 +79,9 @@ def dashboard_tab():
     st.metric("Balance", f"{st.session_state.balance:.2f}")
     st.metric("PnL", f"{st.session_state.pnl:.2f}")
 
-    # Simulated price chart
     chart = st.empty()
-    prices = []
-    if st.session_state.running:
-        for _ in range(10):
-            price = round(random.uniform(90, 110), 2)
-            st.session_state.last_price = price
-            st.session_state.last_action = random.choice(["BUY", "SELL", "HOLD"])
-            st.session_state.pnl += random.uniform(-1, 1)
-            prices.append(price)
-            chart.line_chart(prices)
-            time.sleep(refresh)
+    if st.session_state.prices:
+        chart.line_chart(st.session_state.prices[-50:])
 
 # --- Strategy Tab ---
 def strategy_tab():
@@ -57,23 +93,55 @@ def strategy_tab():
 # --- Logs Tab ---
 def logs_tab():
     st.subheader("Logs")
-    st.text_area("Execution Logs", "No logs yet...", height=200)
+    try:
+        with open("trading.log") as f:
+            st.text_area("Execution Logs", f.read(), height=300)
+    except FileNotFoundError:
+        st.text_area("Execution Logs", "No logs yet...", height=300)
 
 # --- Debug Tab ---
 def debug_tab():
     st.subheader("Debug Info")
     st.write("Session State:", dict(st.session_state))
 
+# --- Analytics Tab ---
+def analytics_tab():
+    st.subheader("Analytics")
+    st.metric("Sharpe Ratio", f"{random.uniform(-1, 2):.2f}")
+    st.metric("Max Drawdown", f"{drawdown_gauge._value.get():.2%}")
+
+# --- Registry Tab ---
+def registry_tab():
+    st.subheader("Model Registry")
+    st.table({
+        "Model": ["Default", "Experimental"],
+        "Accuracy": [0.65, 0.72],
+        "Sharpe": [1.1, 1.4]
+    })
+
+# --- Alerts Tab ---
+def alerts_tab():
+    st.subheader("Active Alerts")
+    if drawdown_gauge._value.get() > 0.10:
+        st.error("⚠️ High Drawdown > 10%")
+    if equity_gauge._value.get() < 10000:
+        st.warning("⚠️ Equity dropped below $10,000")
+    if tracker_gauge._value.get() == 100:
+        st.success("✅ Project category completed")
+
 # --- Main App ---
 def main():
     init_defaults()
-    st.title("SAI Trading Dashboard")
+    st.title("SAI Trading Dashboard Cockpit")
 
     tabs = st.tabs([
         "📊 Dashboard",
         "🧠 Strategy",
         "📜 Logs",
-        "🛠 Debug"
+        "🛠 Debug",
+        "📈 Analytics",
+        "📂 Registry",
+        "🚨 Alerts"
     ])
 
     with tabs[0]:
@@ -84,6 +152,12 @@ def main():
         logs_tab()
     with tabs[3]:
         debug_tab()
+    with tabs[4]:
+        analytics_tab()
+    with tabs[5]:
+        registry_tab()
+    with tabs[6]:
+        alerts_tab()
 
 if __name__ == "__main__":
     main()

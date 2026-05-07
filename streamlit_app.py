@@ -3,6 +3,9 @@ import time
 import random
 import threading
 import logging
+import http.server
+import socketserver
+import threading as th
 from prometheus_client import Gauge, CollectorRegistry, generate_latest
 
 # --- Logging Setup ---
@@ -59,6 +62,22 @@ def trading_loop(refresh):
         logging.info(f"Price={price}, Action={action}, Balance={st.session_state.balance:.2f}, PnL={st.session_state.pnl:.2f}")
         time.sleep(refresh)
 
+# --- Prometheus HTTP Handler ---
+class MetricsHandler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/metrics":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; version=0.0.4")
+            self.end_headers()
+            self.wfile.write(generate_latest(registry))
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+def start_metrics_server(port=8000):
+    server = socketserver.TCPServer(("", port), MetricsHandler)
+    th.Thread(target=server.serve_forever, daemon=True).start()
+
 # --- Dashboard Tab ---
 def dashboard_tab():
     st.subheader("Live Trading Controls")
@@ -107,7 +126,7 @@ def debug_tab():
 # --- Analytics Tab ---
 def analytics_tab():
     st.subheader("Analytics")
-    st.metric("Sharpe Ratio", f"{random.uniform(-1, 2):.2f}")
+    st.metric("Sharpe Ratio", f"{sharpe_gauge._value.get():.2f}")
     st.metric("Max Drawdown", f"{drawdown_gauge._value.get():.2%}")
 
 # --- Registry Tab ---
@@ -160,4 +179,5 @@ def main():
         alerts_tab()
 
 if __name__ == "__main__":
+    start_metrics_server(port=8000)  # Prometheus scrapes here
     main()

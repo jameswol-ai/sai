@@ -1,11 +1,16 @@
-version: "3.9"
-
+version: "3"
 services:
-  sai-bot:
+  cli:
     build: .
-    container_name: sai-bot
+    command: python cli_runner.py --risk --export
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+  dashboard:
+    build: .
+    command: streamlit run streamlit_app.py --server.port=8501
     ports:
       - "8501:8501"
     volumes:
-      - .:/app
-    restart: unless-stopped
+      - ./logs:/app/logs
+      - ./exports:/app/exports

@@ -1,33 +1,47 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: sai-bot-deployment
-  labels:
-    app: sai-bot
+  name: sai-trading-bot
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: sai-bot
+      app: sai-trading-bot
   template:
     metadata:
       labels:
-        app: sai-bot
+        app: sai-trading-bot
     spec:
       containers:
-        - name: sai-bot
-          image: sai-bot:latest   # Replace with your registry image, e.g. ghcr.io/you/sai-bot:latest
-          ports:
-            - containerPort: 8501
-          env:
-            - name: STREAMLIT_SERVER_PORT
-              value: "8501"
-            - name: STREAMLIT_SERVER_ADDRESS
-              value: "0.0.0.0"
-          resources:
-            requests:
-              cpu: "250m"
-              memory: "512Mi"
-            limits:
-              cpu: "500m"
-              memory: "1Gi"
+      - name: cli-runner
+        image: sai-bot:latest
+        command: ["python", "cli_runner.py", "--risk", "--export"]
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+        - name: logs-volume
+          mountPath: /app/logs
+        - name: exports-volume
+          mountPath: /app/exports
+      - name: streamlit-dashboard
+        image: sai-bot:latest
+        command: ["streamlit", "run", "streamlit_app.py", "--server.port=8501"]
+        ports:
+        - containerPort: 8501
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+        - name: logs-volume
+          mountPath: /app/logs
+        - name: exports-volume
+          mountPath: /app/exports
+      volumes:
+      - name: config-volume
+        configMap:
+          name: sai-config
+      - name: logs-volume
+        persistentVolumeClaim:
+          claimName: sai-logs-pvc
+      - name: exports-volume
+        persistentVolumeClaim:
+          claimName: sai-exports-pvc

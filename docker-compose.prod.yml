@@ -1,0 +1,24 @@
+version: "3.9"
+services:
+  sai-bot:
+    build: .
+    command: python run_live.py
+    env_file: .env
+    volumes:
+      - ./logs:/app/logs
+    restart: always
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./sai_alerts.yml:/etc/prometheus/sai_alerts.yml
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./sai_dashboard.json:/etc/grafana/provisioning/dashboards/sai_dashboard.json

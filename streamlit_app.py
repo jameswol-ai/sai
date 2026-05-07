@@ -1,4 +1,4 @@
-import streamlit as st
+Iimport streamlit as st
 import time
 import random
 import threading
@@ -213,7 +213,7 @@ def alerts_tab():
         st.session_state.alerts.append({"timestamp": pd.Timestamp.now(), "event": "Low Equity"})
     if tracker_gauge._value.get() == 100:
 
---- Main App ---
+#--- Main App ---
 def main():
 init_defaults()
 start_metrics_server(port=8000) # Prometheus scrapes here

@@ -38,3 +38,22 @@ parser.add_argument("--dual-dashboard", action="store_true", help="Live summary 
 # In main:
 elif args.dual_dashboard:
     run_dual_dashboard(window=args.window, refresh=args.refresh)
+
+if args.export:
+    with open("trades_export.csv", "w", newline="") as f:
+        fieldnames = ["cycle", "signal", "price", "equity", "drawdown_guard",
+                      "model", "accuracy", "win_rate", "sharpe"]
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for trade in trades:
+            model_name = trade.get("model", "N/A")
+            preds = registry.get(model_name, {}).get("predictions", [])
+            metrics = compute_metrics(preds, [t["price"] for t in trades])
+            writer.writerow({
+                **trade,
+                "model": model_name,
+                "accuracy": metrics["Accuracy"],
+                "win_rate": metrics["Win Rate"],
+                "sharpe": metrics["Sharpe"],
+            })
+    print("📂 Trades + risk + model metrics exported to trades_export.csv")

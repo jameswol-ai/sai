@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sai-config
+data:
+  risk_config.json: |
+    {
+      "max_risk_pct": 0.02,
+      "stop_loss_pct": 0.01,
+      "take_profit_pct": 0.02,
+      "max_drawdown_pct": 0.10
+    }

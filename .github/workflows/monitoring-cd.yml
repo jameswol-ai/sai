@@ -1,0 +1,39 @@
+name: Monitoring CD
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'monitoring/**'
+
+jobs:
+  deploy-argocd:
+    runs-on: ubuntu-latest
+    if: github.event.repository.name == 'sai-monitoring' # optional guard
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: ArgoCD CLI Login
+        run: |
+          argocd login $ARGOCD_SERVER \
+            --username $ARGOCD_USER \
+            --password $ARGOCD_PASS \
+            --insecure
+
+      - name: Sync Application
+        run: |
+          argocd app sync sai-monitoring
+
+  deploy-flux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Push to Flux branch
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git checkout -B flux-sync
+          git push origin flux-sync --force

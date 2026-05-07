@@ -1,1 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: sai-monitoring
+namespace: monitoring
 
+resources:
+  - k8s-deployment.yaml        # Prometheus, Grafana, Alertmanager deployments + services
+  - prometheus/prometheus.yaml # scrape configs
+  - prometheus/alerting-rules.yaml
+  - grafana/sai-dashboard-bundle.json
+  - alertmanager/alertmanager.yaml
+
+configMapGenerator:
+  - name: prometheus-config
+    files:
+      - prometheus/prometheus.yaml
+      - prometheus/alerting-rules.yaml
+  - name: alertmanager-config
+    files:
+      - alertmanager/alertmanager.yaml
+
+secretGenerator:
+  - name: grafana-secret
+    literals:
+      - admin-password=supersecurepassword
+
+generatorOptions:
+  disableNameSuffixHash: true

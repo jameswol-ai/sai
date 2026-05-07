@@ -73,3 +73,31 @@ jobs:
           git add infra/
           git commit -m "GitOps sync: ${{ github.sha }}" || echo "No changes"
           git push
+
+release-tag:
+    runs-on: ubuntu-latest
+    needs: gitops-sync
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Git
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+      - name: Create version tag
+        run: |
+          VERSION="v$(date +'%Y.%m.%d')-${{ github.run_number }}"
+          git tag -a $VERSION -m "Release $VERSION for commit ${{ github.sha }}"
+          git push origin $VERSION
+
+  rollback:
+    runs-on: ubuntu-latest
+    if: failure()
+    needs: [lint-test, docker-build, monitoring-qa, gitops-sync]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rollback to last stable tag
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0)
+          echo "Rolling back to $LAST_TAG"
+          git reset --hard $LAST_TAG
+          git push --force origin HEAD

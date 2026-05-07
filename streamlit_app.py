@@ -115,8 +115,14 @@ def dashboard_tab():
     col1, col2 = st.columns(2)
     with col1:
         if st.button("▶️ Start Trading"):
-            st.session_state.running = True
-            threading.Thread(target=trading_loop, args=(refresh,), daemon=True).start()
+            if not st.session_state.running:
+                st.session_state.running = True
+                # Only start a new thread if one isn’t already alive
+                if "trading_thread" not in st.session_state or not st.session_state.trading_thread.is_alive():
+                    st.session_state.trading_thread = threading.Thread(
+                        target=trading_loop, args=(refresh,), daemon=True
+                    )
+                    st.session_state.trading_thread.start()
     with col2:
         if st.button("⏹ Stop Trading"):
             st.session_state.running = False

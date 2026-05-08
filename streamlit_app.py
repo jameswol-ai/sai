@@ -6,10 +6,16 @@ import logging
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-
-# --- Prometheus Metrics (inline fallback) ---
 from prometheus_client import Gauge, CollectorRegistry, start_http_server
 
+# --- Logging Setup ---
+logging.basicConfig(
+    filename="trading.log",
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s"
+)
+
+# --- Prometheus Metrics ---
 registry = CollectorRegistry()
 equity_gauge = Gauge("sai_equity", "Current equity", registry=registry)
 drawdown_gauge = Gauge("sai_drawdown", "Current drawdown", registry=registry)
@@ -23,29 +29,23 @@ def start_metrics_server(port=8000):
     except Exception as e:
         st.warning(f"⚠️ Failed to start metrics server: {e}")
 
-# --- Risk Plugins (inline stubs if missing) ---
-class StopLossPlugin:
+# --- Risk Plugins (stubs) ---
+class StopLossPlugin: 
     def __init__(self, threshold=0.05): self.threshold = threshold
-    def check(self, trade, balance): return True  # stub
+    def check(self, trade, balance): return True
 
-class MaxDrawdownPlugin:
+class MaxDrawdownPlugin: 
     def __init__(self, max_drawdown=0.2): self.max_drawdown = max_drawdown
-    def check(self, trade, balance): return True  # stub
+    def check(self, trade, balance): return True
 
-class PositionSizePlugin:
+class PositionSizePlugin: 
     def __init__(self, max_fraction=0.1): self.max_fraction = max_fraction
-    def check(self, trade, balance): return True  # stub
+    def check(self, trade, balance): return True
 
+# --- Email Notifier (stub) ---
 class EmailNotifier:
     def notify_pipeline(self, status, commit, branch):
         logging.info(f"EmailNotifier: {status} {commit} {branch}")
-
-# --- Logging Setup ---
-logging.basicConfig(
-    filename="trading.log",
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s"
-)
 
 # --- Session State Defaults ---
 def init_defaults():
@@ -66,7 +66,6 @@ def init_defaults():
         if k not in st.session_state:
             st.session_state[k] = v
 
-# --- Risk Manager Setup ---
 def init_risk_manager():
     st.session_state.risk_manager = [
         StopLossPlugin(threshold=0.05),
@@ -74,7 +73,6 @@ def init_risk_manager():
         PositionSizePlugin(max_fraction=0.10)
     ]
 
-# --- Notifier Setup ---
 def init_notifier():
     st.session_state.notifier = EmailNotifier()
 
@@ -85,35 +83,86 @@ def trading_loop(refresh):
         action = random.choice(["BUY", "SELL", "HOLD"])
         pnl_change = random.uniform(-1, 1)
 
-        trade = {"entry": price, "price": price, "size": 100, "action": action}
-        balance = st.session_state.balance
+        st.session_state.last_price = price
+        st.session_state.last_action = action
+        st.session_state.pnl += pnl_change
+        st.session_state.balance += pnl_change
+        st.session_state.prices.append(price)
+        st.session_state.trades.append({
+            "timestamp": pd.Timestamp.now(),
+            "price": price,
+            "action": action,
+            "profit": pnl_change
+        })
 
-        allowed = all(plugin.check(trade, balance) for plugin in st.session_state.risk_manager)
-        if not allowed:
-            st.session_state.alerts.append({"timestamp": pd.Timestamp.now(), "event": "Risk Block"})
-            st.session_state.notifier.notify_pipeline("BLOCKED", "risk-check", "main")
-            logging.warning("Trade blocked by Risk Manager")
-        else:
-            st.session_state.last_price = price
-            st.session_state.last_action = action
-            st.session_state.pnl += pnl_change
-            st.session_state.balance += pnl_change
-            st.session_state.prices.append(price)
-            st.session_state.trades.append({
-                "timestamp": pd.Timestamp.now(),
-                "price": price,
-                "action": action,
-                "profit": pnl_change
-            })
+        equity_gauge.set(st.session_state.balance)
+        drawdown_gauge.set(max(0, (1000 - st.session_state.balance) / 1000))
+        sharpe_gauge.set(random.uniform(-1, 2))
+        tracker_gauge.set(min(100, st.session_state.tracker_completion + random.uniform(0, 2)))
 
-            equity_gauge.set(st.session_state.balance)
-            drawdown_gauge.set(max(0, (1000 - st.session_state.balance) / 1000))
-            sharpe_gauge.set(random.uniform(-1, 2))
-            tracker_gauge.set(min(100, st.session_state.tracker_completion + random.uniform(0, 2)))
-
-            logging.info(f"Price={price}, Action={action}, Balance={st.session_state.balance:.2f}, PnL={st.session_state.pnl:.2f}")
-
+        logging.info(f"Price={price}, Action={action}, Balance={st.session_state.balance:.2f}, PnL={st.session_state.pnl:.2f}")
         time.sleep(refresh)
+
+# --- Tabs ---
+def dashboard_tab():
+    st.subheader("Live Trading Controls")
+    refresh = st.number_input("Refresh interval (s)", min_value=0.5, value=1.0, step=0.5)
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("▶️ Start Trading"):
+            if not st.session_state.running:
+                st.session_state.running = True
+                threading.Thread(target=trading_loop, args=(refresh,), daemon=True).start()
+    with col2:
+        if st.button("⏹ Stop Trading"):
+            st.session_state.running = False
+
+    st.metric("Last Price", st.session_state.last_price or "—")
+    st.metric("Last Action", st.session_state.last_action or "—")
+    st.metric("Balance", f"{st.session_state.balance:.2f}")
+    st.metric("PnL", f"{st.session_state.pnl:.2f}")
+    if st.session_state.prices:
+        st.line_chart(st.session_state.prices[-50:])
+
+def strategy_tab():
+    st.subheader("Strategy Configuration")
+    st.text_input("Strategy Name", "Default Strategy")
+    st.slider("Risk Level", 1, 10, 5)
+    st.checkbox("Enable Stop Loss", True)
+
+def logs_tab():
+    st.subheader("Logs")
+    try:
+        with open("trading.log") as f:
+            st.text_area("Execution Logs", f.read(), height=300)
+    except FileNotFoundError:
+        st.text_area("Execution Logs", "No logs yet...", height=300)
+
+def debug_tab():
+    st.subheader("Debug Info")
+    st.write("Session State:", dict(st.session_state))
+
+def analytics_tab():
+    st.subheader("Analytics")
+    st.metric("Sharpe Ratio", f"{sharpe_gauge._value.get():.2f}")
+    st.metric("Max Drawdown", f"{drawdown_gauge._value.get():.2%}")
+
+def registry_tab():
+    st.subheader("Model Registry")
+    st.table({
+        "Model": ["Default", "Experimental"],
+        "Accuracy": [0.65, 0.72],
+        "Sharpe": [1.1, 1.4]
+    })
+
+def alerts_tab():
+    st.subheader("Active Alerts")
+    if drawdown_gauge._value.get() > 0.10:
+        st.error("⚠️ High Drawdown > 10%")
+    if equity_gauge._value.get() < 10000:
+        st.warning("⚠️ Equity dropped below $10,000")
+    if tracker_gauge._value.get() == 100:
+        st.success("✅ Project category completed")
 
 # --- Main App ---
 def main():
@@ -126,8 +175,13 @@ def main():
     tabs = st.tabs([
         "📊 Dashboard", "🧠 Strategy", "📜 Logs", "🛠 Debug", "📈 Analytics", "📦 Registry", "🚨 Alerts"
     ])
-
-    # TODO: implement tab functions (dashboard_tab, strategy_tab, etc.)
+    with tabs[0]: dashboard_tab()
+    with tabs[1]: strategy_tab()
+    with tabs[2]: logs_tab()
+    with tabs[3]: debug_tab()
+    with tabs[4]: analytics_tab()
+    with tabs[5]: registry_tab()
+    with tabs[6]: alerts_tab()
 
 if __name__ == "__main__":
     main()

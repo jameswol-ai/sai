@@ -23,11 +23,22 @@ sharpe_gauge = Gauge("sai_sharpe", "Sharpe ratio", registry=registry)
 tracker_gauge = Gauge("sai_tracker_completion", "Project tracker completion", registry=registry)
 
 def start_metrics_server(port=8000):
+    if st.session_state.get("metrics_server_started", False):
+        return  # already running
     try:
         start_http_server(port, registry=registry)
+        st.session_state.metrics_server_started = True
+        st.session_state.metrics_port = port
         st.write(f"✅ Prometheus metrics server running on port {port}")
-    except Exception as e:
-        st.warning(f"⚠️ Failed to start metrics server: {e}")
+    except OSError as e:
+        st.warning(f"⚠️ Port {port} unavailable ({e}). Trying fallback port {port+1}...")
+        try:
+            start_http_server(port + 1, registry=registry)
+            st.session_state.metrics_server_started = True
+            st.session_state.metrics_port = port + 1
+            st.write(f"✅ Prometheus metrics server running on port {port+1}")
+        except OSError as e2:
+            st.error(f"❌ Failed to start metrics server: {e2}")
 
 # --- Risk Plugins (stubs) ---
 class StopLossPlugin: 
@@ -60,7 +71,9 @@ def init_defaults():
         "alerts": [],
         "tracker_completion": 0,
         "risk_manager": [],
-        "notifier": None
+        "notifier": None,
+        "metrics_server_started": False,
+        "metrics_port": None
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -164,51 +177,37 @@ def alerts_tab():
     if tracker_gauge._value.get() == 100:
         st.success("✅ Project category completed")
 
+def helm_tab():
+    st.subheader("Helm Chart Deployment")
+    st.markdown("""
+    Use the provided Helm chart bundle to deploy Prometheus, Grafana, and Alertmanager:
+
+    ```bash
+    helm repo add sai-monitoring https://yourdomain.com/charts
+    helm install sai-monitoring sai-monitoring/sai-chart -f values-production.yaml
+    ```
+
+    - **Chart.yaml** → metadata for the chart
+    - **values.yaml** → default values
+    - **values-production.yaml** → production overrides
+    - **templates/** → Kubernetes manifests (deployment, service, ingress, secret)
+
+    Once deployed, access monitoring at:
+    - Prometheus → `/prometheus`
+    - Grafana → `/grafana`
+    - Alertmanager → `/alertmanager`
+    """)
+
 # --- Main App ---
 def main():
     init_defaults()
     init_risk_manager()
     init_notifier()
-    
-def start_metrics_server(port=8000):
-    if "metrics_server_started" in st.session_state and st.session_state.metrics_server_started:
-        return  # already running
-
-def init_defaults():
-    defaults = {
-        "balance": 1000.0,
-        "pnl": 0.0,
-        "last_price": None,
-        "last_action": None,
-        "running": False,
-        "prices": [],
-        "trades": [],
-        "alerts": [],
-        "tracker_completion": 0,
-        "risk_manager": [],
-        "notifier": None,
-        "metrics_server_started": False
-    }
-    for k, v in defaults.items():
-        if k not in st.session_state:
-            st.session_state[k] = v
-    
-    try:
-        start_http_server(port, registry=registry)
-        st.session_state.metrics_server_started = True
-        st.write(f"✅ Prometheus metrics server running on port {port}")
-    except OSError as e:
-        st.warning(f"⚠️ Port {port} unavailable ({e}). Trying fallback port {port+1}...")
-        try:
-            start_http_server(port + 1, registry=registry)
-            st.session_state.metrics_server_started = True
-            st.write(f"✅ Prometheus metrics server running on port {port+1}")
-        except OSError as e2:
-            st.error(f"❌ Failed to start metrics server: {e2}")
+    start_metrics_server(port=8000)
 
     st.title("SAI Trading Dashboard Cockpit")
     tabs = st.tabs([
-        "📊 Dashboard", "🧠 Strategy", "📜 Logs", "🛠 Debug", "📈 Analytics", "📦 Registry", "🚨 Alerts"
+        "📊 Dashboard", "🧠 Strategy", "📜 Logs", "🛠 Debug", "📈 Analytics", "📦 Registry", "🚨 Alerts", "📦 Helm"
     ])
     with tabs[0]: dashboard_tab()
     with tabs[1]: strategy_tab()
@@ -217,6 +216,7 @@ def init_defaults():
     with tabs[4]: analytics_tab()
     with tabs[5]: registry_tab()
     with tabs[6]: alerts_tab()
+    with tabs[7]: helm_tab()
 
 if __name__ == "__main__":
     main()

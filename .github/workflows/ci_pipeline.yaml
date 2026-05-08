@@ -1,0 +1,46 @@
+name: SAI CI/CD
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test-and-backtest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run unit tests
+        run: pytest tests/
+
+      - name: Run backtests
+        run: python backtests/run_all.py
+
+      - name: Notify Slack
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          payload: |
+            {
+              "text": "SAI CI/CD: ${{ job.status }} on commit ${{ github.sha }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Notify Email
+        if: always()
+        run: |
+          echo "SAI CI/CD: ${{ job.status }} on commit ${{ github.sha }}" \
+          | mail -s "SAI Pipeline Notification" ${{ secrets.NOTIFY_EMAIL }}

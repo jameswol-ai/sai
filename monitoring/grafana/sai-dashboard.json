@@ -1,0 +1,43 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "SAI Trading Dashboard",
+    "panels": [
+      {
+        "type": "stat",
+        "title": "Equity",
+        "targets": [{ "expr": "sai_equity" }],
+        "fieldConfig": { "defaults": { "unit": "currencyUSD" } }
+      },
+      {
+        "type": "stat",
+        "title": "PnL",
+        "targets": [{ "expr": "sai_equity - 1000" }],
+        "fieldConfig": { "defaults": { "unit": "currencyUSD" } }
+      },
+      {
+        "type": "gauge",
+        "title": "Drawdown",
+        "targets": [{ "expr": "sai_drawdown" }],
+        "fieldConfig": { "defaults": { "unit": "percent" } }
+      },
+      {
+        "type": "stat",
+        "title": "Sharpe Ratio",
+        "targets": [{ "expr": "sai_sharpe" }],
+        "fieldConfig": { "defaults": { "unit": "none" } }
+      },
+      {
+        "type": "timeseries",
+        "title": "Trade Prices",
+        "targets": [{ "expr": "sai_equity" }],
+        "fieldConfig": { "defaults": { "unit": "currencyUSD" } }
+      },
+      {
+        "type": "alertlist",
+        "title": "Active Alerts",
+        "targets": []
+      }
+    ]
+  }
+}

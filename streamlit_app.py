@@ -106,5 +106,5 @@ def main():
     # (unchanged tab functions reused here)
     # dashboard_tab(), strategy_tab(), logs_tab(), debug_tab(), analytics_tab(), registry_tab(), alerts_tab()
 
-if name == "main":
-main()
+if __name__ == "__main__":
+    main()

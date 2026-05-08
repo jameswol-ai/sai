@@ -173,6 +173,25 @@ def main():
     if "metrics_server_started" in st.session_state and st.session_state.metrics_server_started:
         return  # already running
 
+def init_defaults():
+    defaults = {
+        "balance": 1000.0,
+        "pnl": 0.0,
+        "last_price": None,
+        "last_action": None,
+        "running": False,
+        "prices": [],
+        "trades": [],
+        "alerts": [],
+        "tracker_completion": 0,
+        "risk_manager": [],
+        "notifier": None,
+        "metrics_server_started": False
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
+    
     try:
         start_http_server(port, registry=registry)
         st.session_state.metrics_server_started = True

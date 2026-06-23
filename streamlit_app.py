@@ -42,8 +42,7 @@ class ReusableWSGIServer(WSGIServer):
 
 def start_metrics_server(port=8000):
     if "metrics_server" not in st.session_state:
-        app = make_wsgi_app(registry=st.session_state["prom_registry"])
-        httpd = ReusableWSGIServer(("", port), WSGIRequestHandler)
+        app = make_wsgi_app(registry=st.session_state["prom_registry"]
         httpd.set_app(app)
 
         thread = threading.Thread(target=httpd.serve_forever, daemon=True)
@@ -117,9 +116,6 @@ def main():
     tab = st.sidebar.radio(
         "Navigation",
         ["Dashboard", "Strategy Config", "Logs", "Model Testing", "Debug", "Plugins"]
-    )
-
-    start_metrics_server(port=8000)
 
     if tab == "Dashboard":
         render_dashboard()
@@ -134,5 +130,4 @@ def main():
     elif tab == "Plugins":
         st.title("Plugin Control Center")
 
-if __name__ == "__main__":
-    main()
+

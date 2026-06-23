@@ -112,7 +112,6 @@ def render_dashboard():
 # --- Main ---
 def main():
     st.sidebar.title("SAI Cockpit")
-    tab = st.sidebar.radio(
         "Navigation",
         ["Dashboard", "Strategy Config", "Logs", "Model Testing", "Debug", "Plugins"]
 

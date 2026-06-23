@@ -4,9 +4,7 @@ import threading
 import time
 import pandas as pd
 import logging
-from sai.trading import LiveTrader
-from sai.backtest import run_backtest
-from sai.plugins.risk import MaxDrawdownRisk, VolatilityRisk
+import random
 from prometheus_client import Gauge, start_http_server
 
 # --- Prometheus metrics ---
@@ -21,12 +19,60 @@ qa_tests_failed = Gauge("sai_tests_failed", "Number of QA tests failed")
 logging.basicConfig(filename="sai.log", level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s")
 
+# --- Dummy trading class ---
+class LiveTrader:
+    def __init__(self):
+        self.total_return = 0.0
+        self.max_drawdown = 0.0
+        self.equity = 100.0
+
+    def execute_trade(self):
+        # Simulate random PnL
+        change = random.uniform(-1, 1)
+        self.equity += change
+        self.total_return = (self.equity - 100.0) / 100.0
+        self.max_drawdown = min(self.max_drawdown, self.total_return)
+        return {"price": self.equity, "pnl": change}
+
+# --- Dummy backtest function ---
+def run_backtest(strategy, start_date, end_date):
+    equity_curve = [100]
+    trades = []
+    for _ in range(50):
+        change = random.uniform(-2, 2)
+        equity_curve.append(equity_curve[-1] + change)
+        trades.append({"price": equity_curve[-1], "pnl": change})
+    total_return = (equity_curve[-1] - 100) / 100
+    max_drawdown = min((eq - 100) / 100 for eq in equity_curve)
+    sharpe_ratio = total_return / (pd.Series(equity_curve).std() or 1)
+    return {
+        "total_return": total_return,
+        "max_drawdown": max_drawdown,
+        "sharpe_ratio": sharpe_ratio,
+        "equity_curve": equity_curve,
+        "trades": trades,
+        "prices": [t["price"] for t in trades],
+    }
+
+# --- Risk plugins (simplified) ---
+class MaxDrawdownRisk:
+    def __init__(self, threshold=0.1):
+        self.threshold = threshold
+    def evaluate(self, trades):
+        min_pnl = min(t["pnl"] for t in trades)
+        return min_pnl < -self.threshold
+
+class VolatilityRisk:
+    def __init__(self, threshold=0.05):
+        self.threshold = threshold
+    def evaluate(self, prices):
+        return pd.Series(prices).pct_change().std() > self.threshold
+
 # --- Live trading loop ---
 def trading_loop(trader: LiveTrader):
     while st.session_state.get("trading_active", False):
         trade = trader.execute_trade()
         logging.info(f"Executed trade: {trade}")
-        # Update Prometheus metrics
         live_return.set(trader.total_return)
         live_drawdown.set(trader.max_drawdown)
         time.sleep(1)
@@ -47,12 +93,14 @@ def strategy_config_tab():
     st.header("Strategy Config")
     st.text_input("Parameter A", key="param_a")
     st.text_input("Parameter B", key="param_b")
-    st.write("Parameters saved to session state.")
 
 def logs_tab():
     st.header("Logs")
-    with open("sai.log") as f:
-        st.text(f.read())
+    try:
+        with open("sai.log") as f:
+            st.text(f.read())
+    except FileNotFoundError:
+        st.write("No logs yet.")
 
 def model_testing_tab():
     st.header("Model Testing")
@@ -72,23 +120,19 @@ def backtest_tab():
         results = run_backtest(strategy, start_date, end_date)
         st.success("Backtest completed!")
 
-        # Risk plugin evaluation
         md_risk = MaxDrawdownRisk(threshold=0.1)
         vol_risk = VolatilityRisk(threshold=0.05)
         st.write("Risk Checks:")
         st.write("Max Drawdown Triggered:", md_risk.evaluate(results["trades"]))
         st.write("Volatility Triggered:", vol_risk.evaluate(results["prices"]))
 
-        # Metrics
         st.metric("Total Return", f"{results['total_return']:.2%}")
         st.metric("Max Drawdown", f"{results['max_drawdown']:.2%}")
         st.metric("Sharpe Ratio", f"{results['sharpe_ratio']:.2f}")
 
-        # Prometheus exporters
         backtest_return.set(results["total_return"])
         backtest_drawdown.set(results["max_drawdown"])
 
-        # Equity curve
         st.line_chart(pd.DataFrame(results["equity_curve"], columns=["Equity"]))
 
 # --- Main ---
@@ -103,7 +147,7 @@ def main():
     with tabs[5]: backtest_tab()
 
 if __name__ == "__main__":
-    start_http_server(8000)  # Prometheus metrics endpoint
+    start_http_server(8000)
     if "trading_active" not in st.session_state:
         st.session_state.trading_active = False
     main()

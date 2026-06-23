@@ -14,26 +14,15 @@ logging.basicConfig(filename="trading.log", level=logging.INFO, force=True)
 
 # --- Registry & Metrics Guard ---
 if "prom_registry" not in st.session_state:
-    st.session_state["prom_registry"] = CollectorRegistry()
+    registry = CollectorRegistry()
+    st.session_state["prom_registry"] = registry
 
-    st.session_state["pnl_total"] = Gauge(
-        "sai_pnl_total", "Total Profit and Loss", registry=st.session_state["prom_registry"]
-    )
-    st.session_state["trades_per_minute"] = Gauge(
-        "sai_trades_per_minute", "Trades executed per minute", registry=st.session_state["prom_registry"]
-    )
-    st.session_state["trade_latency"] = Gauge(
-        "sai_trade_latency_seconds", "Latency per trade in seconds", registry=st.session_state["prom_registry"]
-    )
-    st.session_state["open_positions"] = Gauge(
-        "sai_open_positions", "Number of open positions", registry=st.session_state["prom_registry"]
-    )
-    st.session_state["model_version"] = Gauge(
-        "sai_model_version", "Current ML model version", registry=st.session_state["prom_registry"]
-    )
-    st.session_state["trade_counter"] = Counter(
-        "sai_trade_count", "Total trades executed", registry=st.session_state["prom_registry"]
-    )
+    st.session_state["pnl_total"] = Gauge("sai_pnl_total", "Total Profit and Loss", registry=registry)
+    st.session_state["trades_per_minute"] = Gauge("sai_trades_per_minute", "Trades executed per minute", registry=registry)
+    st.session_state["trade_latency"] = Gauge("sai_trade_latency_seconds", "Latency per trade in seconds", registry=registry)
+    st.session_state["open_positions"] = Gauge("sai_open_positions", "Number of open positions", registry=registry)
+    st.session_state["model_version"] = Gauge("sai_model_version", "Current ML model version", registry=registry)
+    st.session_state["trade_counter"] = Counter("sai_trade_count", "Total trades executed", registry=registry)
 
 # Aliases
 pnl_total = st.session_state["pnl_total"]
@@ -56,8 +45,10 @@ def start_metrics_server(port=8000):
         app = make_wsgi_app(registry=st.session_state["prom_registry"])
         httpd = ReusableWSGIServer(("", port), WSGIRequestHandler)
         httpd.set_app(app)
+
         thread = threading.Thread(target=httpd.serve_forever, daemon=True)
         thread.start()
+
         st.session_state["metrics_server"] = httpd
         st.sidebar.success(f"✅ Prometheus metrics server running on port {port}")
 
@@ -80,7 +71,6 @@ def trigger_alert(message, level="error"):
         st.warning(message)
     else:
         st.info(message)
-
     logging.warning(f"ALERT: {message}")
 
 # --- Dashboard ---

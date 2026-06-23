@@ -1,39 +1,52 @@
 {
   "dashboard": {
     "id": null,
-    "title": "SAI Trading Bot Dashboard",
-    "tags": ["trading", "prometheus"],
-    "timezone": "browser",
+    "title": "SAI Trading Cockpit",
     "panels": [
       {
         "type": "graph",
-        "title": "Trade Price",
+        "title": "Live Trading Return",
         "targets": [
-          { "expr": "sai_trade_price", "legendFormat": "Price" }
+          { "expr": "sai_live_return", "legendFormat": "Live Return" }
         ],
-        "id": 1
+        "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 }
       },
       {
         "type": "graph",
-        "title": "Balance",
+        "title": "Backtest Return",
         "targets": [
-          { "expr": "sai_balance", "legendFormat": "Balance" }
+          { "expr": "sai_backtest_return", "legendFormat": "Backtest Return" }
         ],
-        "id": 2
+        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 }
       },
       {
         "type": "graph",
-        "title": "Positions",
+        "title": "Drawdown Comparison",
         "targets": [
-          { "expr": "sai_positions", "legendFormat": "Positions" }
+          { "expr": "sai_live_drawdown", "legendFormat": "Live Drawdown" },
+          { "expr": "sai_backtest_drawdown", "legendFormat": "Backtest Drawdown" }
         ],
-        "id": 3
+        "gridPos": { "x": 0, "y": 8, "w": 24, "h": 8 }
       },
       {
         "type": "stat",
-        "title": "Decision",
+        "title": "QA Tests Passed",
         "targets": [
-          { "expr": "sai_decision", "legendFormat": "Decision" }
+          { "expr": "sai_tests_passed" }
+        ],
+        "gridPos": { "x": 0, "y": 16, "w": 12, "h": 4 }
+      },
+      {
+        "type": "stat",
+        "title": "QA Tests Failed",
+        "targets": [
+          { "expr": "sai_tests_failed" }
+        ],
+        "gridPos": { "x": 12, "y": 16, "w": 12, "h": 4 }
+      }
+    ]
+  }
+}
         ],
         "id": 4
       },

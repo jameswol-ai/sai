@@ -1,23 +1,25 @@
-# streamlit_app.py (patched for duplicate metrics)
+# streamlit_app.py (fixed with custom registry)
 import streamlit as st
 import threading
 import time
 import pandas as pd
 import logging
 import random
-from prometheus_client import Gauge, start_http_server
+from prometheus_client import Gauge, start_http_server, CollectorRegistry
 
-# --- Prometheus metrics helper ---
-def get_or_create_gauge(name, description):
-    if name not in st.session_state:
-        st.session_state[name] = Gauge(name, description)
-    return st.session_state[name]
+# --- Prometheus registry (isolated) ---
+if "prom_registry" not in st.session_state:
+    st.session_state.prom_registry = CollectorRegistry()
+    st.session_state.live_return = Gauge("sai_live_return", "Live trading total return", registry=st.session_state.prom_registry)
+    st.session_state.live_drawdown = Gauge("sai_live_drawdown", "Live trading max drawdown", registry=st.session_state.prom_registry)
+    st.session_state.backtest_return = Gauge("sai_backtest_return", "Backtest total return", registry=st.session_state.prom_registry)
+    st.session_state.backtest_drawdown = Gauge("sai_backtest_drawdown", "Backtest max drawdown", registry=st.session_state.prom_registry)
 
-# Create metrics safely (no duplicates)
-live_return = get_or_create_gauge("sai_live_return", "Live trading total return")
-live_drawdown = get_or_create_gauge("sai_live_drawdown", "Live trading max drawdown")
-backtest_return = get_or_create_gauge("sai_backtest_return", "Backtest total return")
-backtest_drawdown = get_or_create_gauge("sai_backtest_drawdown", "Backtest max drawdown")
+# Aliases for convenience
+live_return = st.session_state.live_return
+live_drawdown = st.session_state.live_drawdown
+backtest_return = st.session_state.backtest_return
+backtest_drawdown = st.session_state.backtest_drawdown
 
 # --- Logging setup ---
 logging.basicConfig(filename="sai.log", level=logging.INFO,
@@ -124,7 +126,6 @@ def backtest_tab():
         results = run_backtest(strategy, start_date, end_date)
         st.success("Backtest completed!")
 
-        # Risk plugin evaluation
         md_risk = MaxDrawdownRisk(threshold=0.1)
         vol_risk = VolatilityRisk(threshold=0.05)
         drawdown_triggered = md_risk.evaluate(results["trades"])
@@ -141,16 +142,13 @@ def backtest_tab():
         else:
             st.success("✅ Volatility within safe limits.")
 
-        # Metrics
         st.metric("Total Return", f"{results['total_return']:.2%}")
         st.metric("Max Drawdown", f"{results['max_drawdown']:.2%}")
         st.metric("Sharpe Ratio", f"{results['sharpe_ratio']:.2f}")
 
-        # Prometheus exporters
         backtest_return.set(results["total_return"])
         backtest_drawdown.set(results["max_drawdown"])
 
-        # Equity curve
         st.line_chart(pd.DataFrame(results["equity_curve"], columns=["Equity"]))
 
 # --- Main ---
@@ -166,7 +164,7 @@ def main():
 
 if __name__ == "__main__":
     if "metrics_server_started" not in st.session_state:
-        start_http_server(8000)
+        start_http_server(8000, registry=st.session_state.prom_registry)
         st.session_state["metrics_server_started"] = True
     if "trading_active" not in st.session_state:
         st.session_state.trading_active = False

@@ -1,0 +1,8 @@
+CURRENCIES = {
+    "USD": {"symbol": "$", "rate": 1.0},       # base
+    "SSP": {"symbol": "£", "rate": 1300.0},    # South Sudanese Pound
+    "UGX": {"symbol": "USh", "rate": 3800.0},  # Ugandan Shilling
+    "KES": {"symbol": "KSh", "rate": 130.0},   # Kenyan Shilling
+    "TZS": {"symbol": "TSh", "rate": 2500.0},  # Tanzanian Shilling
+    "RWF": {"symbol": "FRw", "rate": 1300.0},  # Rwandan Franc
+}

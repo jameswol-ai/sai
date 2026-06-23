@@ -25,7 +25,6 @@ with tabs[2]:
 # Forecast
 with tabs[3]:
     st.header("FX Forecasts")
-    currency = st.selectbox("Select Currency", east_africa.CURRENCIES)
     horizon = st.slider("Forecast Horizon (days)", 7, 30, 7)
 
     series = pd.Series(list(east_africa.get_rates()["rates"].values()))

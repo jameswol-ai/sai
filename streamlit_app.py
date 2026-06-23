@@ -22,20 +22,6 @@ with tabs[2]:
     except FileNotFoundError:
         st.warning("No logs yet.")
 
-# Forecast
-with tabs[3]:
-    st.header("FX Forecasts")
-    horizon = st.slider("Forecast Horizon (days)", 7, 30, 7)
-
-    series = pd.Series(list(east_africa.get_rates()["rates"].values()))
-
-    arima_preds = fx_arima.forecast(series, steps=horizon)
-    st.line_chart(pd.Series(arima_preds, name="ARIMA Forecast"))
-
-    lstm_model = fx_lstm.train_lstm(series.values, epochs=5)
-    lstm_preds = fx_lstm.forecast(lstm_model, series.values, steps=horizon)
-    st.line_chart(pd.Series(lstm_preds, name="LSTM Forecast"))
-
 # Debug
 with tabs[4]:
     st.header("Debug Tools")

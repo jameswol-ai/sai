@@ -253,3 +253,9 @@ with tab_debug:
         "pnl": st.session_state.get("pnl"),
         "total_prices": len(st.session_state.metrics.prices),
     })
+currency_choice = st.selectbox(
+    "Select Currency",
+    options=list(CURRENCIES.keys()),
+    index=0
+)
+st.session_state.bot.currency = currency_choice

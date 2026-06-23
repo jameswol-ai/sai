@@ -1,3 +1,10 @@
+# plugins/__init__.py
+
+from . import exchanges
+from . import prediction
+from . import strategies  # now exists
+
+
 #sai - Plugins Package
 ---------------------------------
 This package contains modular plugin integrations for:
@@ -31,11 +38,3 @@ __all__ = [
 # Optional: versioning for plugins package
 __version__ = "0.1.0"
 
-# plugins/__init__.py
-
-# Only import modules that exist
-from . import exchanges
-from . import prediction
-
-# If you don’t yet have strategies.py, comment this out:
-# from . import strategies

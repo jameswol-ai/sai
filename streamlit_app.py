@@ -1,4 +1,4 @@
-# streamlit_app.py
+# streamlit_app.py (patched for duplicate metrics)
 import streamlit as st
 import threading
 import time
@@ -7,13 +7,17 @@ import logging
 import random
 from prometheus_client import Gauge, start_http_server
 
-# --- Prometheus metrics ---
-live_return = Gauge("sai_live_return", "Live trading total return")
-live_drawdown = Gauge("sai_live_drawdown", "Live trading max drawdown")
-backtest_return = Gauge("sai_backtest_return", "Backtest total return")
-backtest_drawdown = Gauge("sai_backtest_drawdown", "Backtest max drawdown")
-qa_tests_passed = Gauge("sai_tests_passed", "Number of QA tests passed")
-qa_tests_failed = Gauge("sai_tests_failed", "Number of QA tests failed")
+# --- Prometheus metrics helper ---
+def get_or_create_gauge(name, description):
+    if name not in st.session_state:
+        st.session_state[name] = Gauge(name, description)
+    return st.session_state[name]
+
+# Create metrics safely (no duplicates)
+live_return = get_or_create_gauge("sai_live_return", "Live trading total return")
+live_drawdown = get_or_create_gauge("sai_live_drawdown", "Live trading max drawdown")
+backtest_return = get_or_create_gauge("sai_backtest_return", "Backtest total return")
+backtest_drawdown = get_or_create_gauge("sai_backtest_drawdown", "Backtest max drawdown")
 
 # --- Logging setup ---
 logging.basicConfig(filename="sai.log", level=logging.INFO,
@@ -93,7 +97,6 @@ def strategy_config_tab():
     st.header("Strategy Config")
     st.text_input("Parameter A", key="param_a")
     st.text_input("Parameter B", key="param_b")
-    st.write("Parameters saved to session state.")
 
 def logs_tab():
     st.header("Logs")
@@ -124,9 +127,19 @@ def backtest_tab():
         # Risk plugin evaluation
         md_risk = MaxDrawdownRisk(threshold=0.1)
         vol_risk = VolatilityRisk(threshold=0.05)
+        drawdown_triggered = md_risk.evaluate(results["trades"])
+        volatility_triggered = vol_risk.evaluate(results["prices"])
+
         st.subheader("Risk Checks")
-        st.write("Max Drawdown Triggered:", md_risk.evaluate(results["trades"]))
-        st.write("Volatility Triggered:", vol_risk.evaluate(results["prices"]))
+        if drawdown_triggered:
+            st.error("⚠️ Max Drawdown Risk Triggered!")
+        else:
+            st.success("✅ Max Drawdown within safe limits.")
+
+        if volatility_triggered:
+            st.error("⚠️ Volatility Risk Triggered!")
+        else:
+            st.success("✅ Volatility within safe limits.")
 
         # Metrics
         st.metric("Total Return", f"{results['total_return']:.2%}")
@@ -152,7 +165,9 @@ def main():
     with tabs[5]: backtest_tab()
 
 if __name__ == "__main__":
-    start_http_server(8000)
+    if "metrics_server_started" not in st.session_state:
+        start_http_server(8000)
+        st.session_state["metrics_server_started"] = True
     if "trading_active" not in st.session_state:
         st.session_state.trading_active = False
     main()

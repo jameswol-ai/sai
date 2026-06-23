@@ -1,0 +1,12 @@
+def snapshot(self, bot):
+    with self._lock:
+        return {
+            "last_price": self.prices[-1] if self.prices else None,
+            "last_action": self.actions[-1] if self.actions else None,
+            "balance_usd": self.balance,
+            "balance_local": getattr(self, "balance_local", bot.convert_balance(st.session_state.fx_rates)),
+            "currency": bot.currency,
+            "pnl_usd": self.pnl,
+            "pnl_local": getattr(self, "pnl_local", 0),
+            "prices": list(self.prices),
+        }

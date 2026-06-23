@@ -3,7 +3,6 @@ import threading
 import logging
 import time
 import pandas as pd
-from trading_loop import run_trading_loop
 from plugins import risk_plugins, strategy_plugins
 from notifier_plugins import notifier_plugins
 

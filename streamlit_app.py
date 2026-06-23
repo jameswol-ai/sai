@@ -1,7 +1,7 @@
 import streamlit as st
 import threading
 import logging
-from plugins import notifications 
+import plugins
 
 # --- Dashboard ---
 def render_dashboard():

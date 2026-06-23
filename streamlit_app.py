@@ -1,7 +1,7 @@
 import streamlit as st
 import threading
 import logging
-from plugins import risk_plugins, notifier_plugins, strategy_plugins
+from plugins import notifications 
 
 # --- Dashboard ---
 def render_dashboard():

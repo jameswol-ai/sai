@@ -1,0 +1,6 @@
+class Metrics:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.prices, self.actions, self.trades = [], [], []
+        self.balance, self.pnl = 1000, 0
+        self.balance_local, self.pnl_local = 1000, 0  # <-- add these

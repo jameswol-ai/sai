@@ -1,7 +1,6 @@
 import streamlit as st
 import threading
 import logging
-from plugins import risk_plugins, notifier_plugins, strategy_plugins
 
 # Configure logging
 logging.basicConfig(filename="trading_logs.log", level=logging.INFO)

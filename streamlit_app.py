@@ -6,8 +6,17 @@ import logging
 import matplotlib.pyplot as plt
 import pandas as pd
 import random
+import pickle
 
-from sai.bot.main import run_bot, load_model, test_model
+# --- Safe stubs (replace with real implementations later) ---
+def run_bot():
+    return {"trade": "BUY", "symbol": "EURUSD", "amount": 1000}
+
+def load_model(file_obj):
+    return pickle.load(file_obj)
+
+def test_model(model):
+    return {"predictions": [1, 0, 1, 1, 0], "accuracy": 0.8}
 
 # Configure logging
 logging.basicConfig(

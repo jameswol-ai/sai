@@ -1,49 +1,42 @@
 import streamlit as st
 import threading
 import logging
+from plugins import risk_plugins, notifier_plugins, strategy_plugins
 
-# --- Dashboard ---
+# Configure logging
+logging.basicConfig(filename="trading_logs.log", level=logging.INFO)
+
 def render_dashboard():
-    st.title("SAI Dashboard")
-    st.write("Live trading loop, charts, metrics, and logs go here.")
-    # Example: threaded trading loop
+    st.title("Dashboard")
+    st.write("Live trading loop, charts, and metrics here.")
+    # Example threaded loop
     if "trading_thread" not in st.session_state:
         st.session_state.trading_thread = threading.Thread(target=run_trading_loop, daemon=True)
         st.session_state.trading_thread.start()
 
 def run_trading_loop():
     while True:
-        # Replace with actual trading logic
-        logging.info("Executing trade cycle...")
-        # Update charts, metrics, logs
-        pass
+        # Replace with trading logic
+        logging.info("Trade executed")
+        # Update charts/metrics here
 
-# --- Strategy Config ---
 def render_strategy_config():
     st.title("Strategy Config")
     st.write("Configure strategy parameters here.")
 
-# --- Logs ---
 def render_logs():
     st.title("Logs")
-    with open("trading.log", "r") as f:
+    with open("trading_logs.log") as f:
         st.text(f.read())
 
-# --- Model Testing ---
 def render_model_testing():
     st.title("Model Testing")
-    st.write("Run backtests and model evaluations here.")
+    st.write("Backtest and model evaluation here.")
 
-# --- Debug ---
-def render_debug():
-    st.title("Debug Tools")
-    st.write("Diagnostics and troubleshooting utilities.")
-
-# --- Plugins ---
 def render_plugins_tab():
     st.title("Plugin Control Center")
 
-    # 🔒 Risk Management Plugins
+    # Risk Management Plugins
     st.header("Risk Management")
     for plugin in risk_plugins:
         enabled = st.checkbox(f"Enable {plugin.name}", value=plugin.enabled, key=f"{plugin.name}_enabled")
@@ -56,12 +49,12 @@ def render_plugins_tab():
         )
         plugin.update(enabled=enabled, param=param)
 
-    # 🎯 Strategy Switcher
+    # Strategy Switcher
     st.header("Strategy")
     strategy_choice = st.selectbox("Select Strategy", [s.name for s in strategy_plugins], key="strategy_choice")
     strategy_plugins[strategy_choice].activate()
 
-    # 📣 Notifier Controls
+    # Notifier Controls
     st.header("Notifications")
     for notifier in notifier_plugins:
         active = st.checkbox(f"Enable {notifier.name}", value=notifier.active, key=f"{notifier.name}_active")
@@ -69,17 +62,13 @@ def render_plugins_tab():
             notifier.test_ping()
         notifier.update(active=active)
 
-    # 📝 Audit Log
+    # Audit Log
     st.header("Audit Log")
     st.write("Recent plugin actions and parameter changes will appear here.")
 
-# --- Main ---
 def main():
     st.sidebar.title("SAI Cockpit")
-    tab = st.sidebar.radio(
-        "Navigate",
-        ["Dashboard", "Strategy Config", "Logs", "Model Testing", "Debug", "Plugins"]
-    )
+    tab = st.sidebar.radio("Navigate", ["Dashboard", "Strategy Config", "Logs", "Model Testing", "Plugins"])
 
     if tab == "Dashboard":
         render_dashboard()
@@ -89,11 +78,8 @@ def main():
         render_logs()
     elif tab == "Model Testing":
         render_model_testing()
-    elif tab == "Debug":
-        render_debug()
     elif tab == "Plugins":
         render_plugins_tab()
 
 if __name__ == "__main__":
-    logging.basicConfig(filename="trading.log", level=logging.INFO)
     main()

@@ -2,6 +2,7 @@ import streamlit as st
 import threading
 import logging
 import time
+from collections import deque
 
 # Import plugin registries (must exist in your repo)
 from plugins import risk_plugins, notifier_plugins, strategy_plugins
@@ -12,7 +13,6 @@ logging.basicConfig(filename="trading_logs.log", level=logging.INFO, format="%(a
 # --- Trading Loop ---
 def run_trading_loop():
     while st.session_state.get("trading_active", True):
-        # Replace with real trading logic
         logging.info("Trade executed")
         time.sleep(2)  # prevent busy loop
 
@@ -21,9 +21,11 @@ def start_trading_loop():
         st.session_state.trading_active = True
         st.session_state.trading_thread = threading.Thread(target=run_trading_loop, daemon=True)
         st.session_state.trading_thread.start()
+        st.success("Trading loop started.")
 
 def stop_trading_loop():
     st.session_state.trading_active = False
+    st.success("Trading loop stopped.")
     logging.info("Trading loop stopped.")
 
 # --- Tabs ---
@@ -43,9 +45,11 @@ def render_logs():
     st.title("Logs")
     try:
         with open("trading_logs.log") as f:
-            st.text(f.read())
+            # Stream last 50 lines for responsiveness
+            lines = deque(f, maxlen=50)
+            st.text("".join(lines))
     except FileNotFoundError:
-        st.write("No logs yet.")
+        st.warning("No logs found yet. Start trading to generate logs.")
 
 def render_model_testing():
     st.title("Model Testing")
@@ -65,32 +69,48 @@ def render_plugins_tab():
             getattr(plugin, "default", 50),
             key=f"{plugin.name}_param"
         )
-        plugin.update(enabled=enabled, param=param)
-        logging.info(f"Risk plugin {plugin.name} updated: enabled={enabled}, param={param}")
+        try:
+            plugin.update(enabled=enabled, param=param)
+            logging.info(f"Risk plugin {plugin.name} updated: enabled={enabled}, param={param}")
+            st.success(f"{plugin.name} updated successfully.")
+        except Exception as e:
+            st.error(f"Error updating {plugin.name}: {e}")
 
     # Strategy Switcher
     st.header("Strategy")
     strategy_choice = st.selectbox("Select Strategy", [s.name for s in strategy_plugins], key="strategy_choice")
-    strategy_plugins[strategy_choice].activate()
-    logging.info(f"Strategy switched to {strategy_choice}")
+    try:
+        strategy_plugins[strategy_choice].activate()
+        logging.info(f"Strategy switched to {strategy_choice}")
+        st.success(f"Strategy switched to {strategy_choice}")
+    except Exception as e:
+        st.error(f"Error switching strategy: {e}")
 
     # Notifier Controls
     st.header("Notifications")
     for notifier in notifier_plugins:
         active = st.checkbox(f"Enable {notifier.name}", value=getattr(notifier, "active", False), key=f"{notifier.name}_active")
         if st.button(f"Test {notifier.name}", key=f"{notifier.name}_test"):
-            notifier.test_ping()
-            logging.info(f"Notifier {notifier.name} test ping sent")
-        notifier.update(active=active)
-        logging.info(f"Notifier {notifier.name} updated: active={active}")
+            try:
+                notifier.test_ping()
+                logging.info(f"Notifier {notifier.name} test ping sent")
+                st.success(f"{notifier.name} test ping sent")
+            except Exception as e:
+                st.error(f"Error testing {notifier.name}: {e}")
+        try:
+            notifier.update(active=active)
+            logging.info(f"Notifier {notifier.name} updated: active={active}")
+        except Exception as e:
+            st.error(f"Error updating notifier {notifier.name}: {e}")
 
     # Audit Log
     st.header("Audit Log")
     try:
         with open("trading_logs.log") as f:
-            st.text(f.read())
+            lines = deque(f, maxlen=50)
+            st.text("".join(lines))
     except FileNotFoundError:
-        st.write("No audit log yet.")
+        st.warning("No audit log yet. Actions will appear here once plugins are used.")
 
 # --- Main ---
 def main():
@@ -109,4 +129,7 @@ def main():
         render_plugins_tab()
 
 if __name__ == "__main__":
+    # Initialize session state defaults
+    if "trading_active" not in st.session_state:
+        st.session_state.trading_active = False
     main()

@@ -51,15 +51,13 @@ def stop_bot():
 
 # --- Currency & Forecast Helpers ---
 def fetch_currency_data():
-    # Dummy currency rates for demo
     currencies = ["USD", "EUR", "GBP", "JPY", "UGX"]
     rates = {cur: round(random.uniform(0.5, 1500), 2) for cur in currencies}
     st.session_state.rates = rates
     return rates
 
 def forecast_rates(rates):
-    # Simple forecast: add random drift
-    forecast = {cur: val * (1 + random.uniform(-0.05, 0.05)) for cur, val in rates.items()}
+    forecast = {cur: round(val * (1 + random.uniform(-0.05, 0.05)), 2) for cur, val in rates.items()}
     return forecast
 
 # --- Streamlit UI ---

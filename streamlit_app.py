@@ -5,7 +5,6 @@ import time
 from collections import deque
 
 # Import plugin registries with explicit package path
-from sai.plugins import risk_plugins, notifier_plugins, strategy_plugins
 
 # Configure logging
 logging.basicConfig(filename="trading_logs.log", level=logging.INFO, format="%(asctime)s - %(message)s")

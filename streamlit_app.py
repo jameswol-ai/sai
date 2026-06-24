@@ -1,184 +1,112 @@
-# streamlit_app.py (final patched version)
+# sai/streamlit_app.py
 import streamlit as st
 import threading
 import time
-import pandas as pd
 import logging
-import random
-from prometheus_client import Gauge, CollectorRegistry, make_wsgi_app
-from wsgiref.simple_server import WSGIServer, WSGIRequestHandler
-import threading
+import matplotlib.pyplot as plt
 
-# --- Safe Prometheus metrics server ---
-class ReusableWSGIServer(WSGIServer):
-    allow_reuse_address = True
+from sai.bot.main import run_bot, get_data, load_model, test_model
 
-def start_metrics_server(port=8000, registry=None):
-    if "metrics_server_started" not in st.session_state:
-        app = make_wsgi_app(registry=registry)
-        httpd = ReusableWSGIServer(("", port), WSGIRequestHandler)
-        httpd.set_app(app)
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
-        st.session_state["metrics_server_started"] = True
+# Configure logging
+logging.basicConfig(
+    filename="sai_app.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
-# --- Prometheus registry ---
-if "prom_registry" not in st.session_state:
-    st.session_state.prom_registry = CollectorRegistry()
-    st.session_state.live_return = Gauge("sai_live_return", "Live trading total return", registry=st.session_state.prom_registry)
-    st.session_state.live_drawdown = Gauge("sai_live_drawdown", "Live trading max drawdown", registry=st.session_state.prom_registry)
-    st.session_state.backtest_return = Gauge("sai_backtest_return", "Backtest total return", registry=st.session_state.prom_registry)
-    st.session_state.backtest_drawdown = Gauge("sai_backtest_drawdown", "Backtest max drawdown", registry=st.session_state.prom_registry)
+# Initialize session state
+if "bot_thread" not in st.session_state:
+    st.session_state.bot_thread = None
+if "bot_running" not in st.session_state:
+    st.session_state.bot_running = False
+if "logs" not in st.session_state:
+    st.session_state.logs = []
 
-# Aliases
-live_return = st.session_state.live_return
-live_drawdown = st.session_state.live_drawdown
-backtest_return = st.session_state.backtest_return
-backtest_drawdown = st.session_state.backtest_drawdown
+# Helper: threaded bot runner
+def start_bot():
+    def bot_loop():
+        logging.info("Bot started.")
+        while st.session_state.bot_running:
+            try:
+                trade_info = run_bot()
+                st.session_state.logs.append(trade_info)
+                time.sleep(2)
+            except Exception as e:
+                logging.error(f"Bot error: {e}")
+                st.session_state.logs.append(f"Error: {e}")
+                break
+        logging.info("Bot stopped.")
 
-# --- Logging setup ---
-logging.basicConfig(filename="sai.log", level=logging.INFO,
-                    format="%(asctime)s %(levelname)s %(message)s")
+    st.session_state.bot_running = True
+    st.session_state.bot_thread = threading.Thread(target=bot_loop, daemon=True)
+    st.session_state.bot_thread.start()
 
-# --- Dummy trading class ---
-class LiveTrader:
-    def __init__(self):
-        self.total_return = 0.0
-        self.max_drawdown = 0.0
-        self.equity = 100.0
+def stop_bot():
+    st.session_state.bot_running = False
+    logging.info("Bot stop requested.")
 
-    def execute_trade(self):
-        change = random.uniform(-1, 1)
-        self.equity += change
-        self.total_return = (self.equity - 100.0) / 100.0
-        self.max_drawdown = min(self.max_drawdown, self.total_return)
-        return {"price": self.equity, "pnl": change}
+# --- Streamlit UI ---
+st.set_page_config(page_title="SAI Trading Bot", layout="wide")
+st.title("📈 SAI Trading Bot Dashboard")
 
-# --- Dummy backtest function ---
-def run_backtest(strategy, start_date, end_date):
-    equity_curve = [100]
-    trades = []
-    for _ in range(50):
-        change = random.uniform(-2, 2)
-        equity_curve.append(equity_curve[-1] + change)
-        trades.append({"price": equity_curve[-1], "pnl": change})
-    total_return = (equity_curve[-1] - 100) / 100
-    max_drawdown = min((eq - 100) / 100 for eq in equity_curve)
-    sharpe_ratio = total_return / (pd.Series(equity_curve).std() or 1)
-    return {
-        "total_return": total_return,
-        "max_drawdown": max_drawdown,
-        "sharpe_ratio": sharpe_ratio,
-        "equity_curve": equity_curve,
-        "trades": trades,
-        "prices": [t["price"] for t in trades],
-    }
+tabs = st.tabs(["Dashboard", "Strategy Config", "Logs", "Model Testing", "Debug"])
 
-# --- Risk plugins ---
-class MaxDrawdownRisk:
-    def __init__(self, threshold=0.1):
-        self.threshold = threshold
-    def evaluate(self, trades):
-        min_pnl = min(t["pnl"] for t in trades)
-        return min_pnl < -self.threshold
+# Dashboard Tab
+with tabs[0]:
+    st.header("Live Trading Dashboard")
+    col1, col2 = st.columns([1, 1])
 
-class VolatilityRisk:
-    def __init__(self, threshold=0.05):
-        self.threshold = threshold
-    def evaluate(self, prices):
-        return pd.Series(prices).pct_change().std() > self.threshold
+    with col1:
+        if st.button("Start Bot", disabled=st.session_state.bot_running):
+            start_bot()
+        if st.button("Stop Bot", disabled=not st.session_state.bot_running):
+            stop_bot()
 
-# --- Live trading loop ---
-def trading_loop(trader: LiveTrader):
-    while st.session_state.get("trading_active", False):
-        trade = trader.execute_trade()
-        logging.info(f"Executed trade: {trade}")
-        live_return.set(trader.total_return)
-        live_drawdown.set(trader.max_drawdown)
-        time.sleep(1)
+    with col2:
+        st.write("Market Snapshot")
+        try:
+            data = get_data()
+            st.json(data)
+        except Exception as e:
+            st.error(f"Data fetch error: {e}")
 
-# --- Tabs ---
-def dashboard_tab():
-    st.header("Dashboard")
-    if st.button("Start Trading"):
-        if not st.session_state.get("trading_active", False):
-            st.session_state.trading_active = True
-            trader = LiveTrader()
-            threading.Thread(target=trading_loop, args=(trader,), daemon=True).start()
-            st.success("Trading loop started.")
-    if st.button("Stop Trading"):
-        st.session_state.trading_active = False
-        st.warning("Trading loop stopped.")
+    st.write("Trade Logs (latest 10)")
+    st.table(st.session_state.logs[-10:])
 
-def strategy_config_tab():
-    st.header("Strategy Config")
-    st.text_input("Parameter A", key="param_a")
-    st.text_input("Parameter B", key="param_b")
+# Strategy Config Tab
+with tabs[1]:
+    st.header("Strategy Configuration")
+    risk_level = st.slider("Risk Level", 1, 10, 5)
+    st.write(f"Selected Risk Level: {risk_level}")
+    # Extend with more strategy parameters as needed
 
-def logs_tab():
-    st.header("Logs")
+# Logs Tab
+with tabs[2]:
+    st.header("Application Logs")
     try:
-        with open("sai.log") as f:
-            st.text(f.read())
+        with open("sai_app.log", "r") as f:
+            log_lines = f.readlines()[-50:]
+        st.text("".join(log_lines))
     except FileNotFoundError:
         st.info("No logs yet.")
 
-def model_testing_tab():
+# Model Testing Tab
+with tabs[3]:
     st.header("Model Testing")
-    st.write("Placeholder for ML model testing.")
+    uploaded_model = st.file_uploader("Upload model.pkl", type=["pkl"])
+    if uploaded_model:
+        model = load_model(uploaded_model)
+        st.success("Model loaded successfully.")
+        test_results = test_model(model)
+        st.write("Test Results:", test_results)
 
-def debug_tab():
-    st.header("Debug")
-    st.json(st.session_state)
+        # Example visualization
+        fig, ax = plt.subplots()
+        ax.plot(test_results.get("predictions", []), label="Predictions")
+        ax.legend()
+        st.pyplot(fig)
 
-def backtest_tab():
-    st.header("Backtest Engine")
-    strategy = st.selectbox("Select Strategy", ["Mean Reversion", "Momentum", "Custom"])
-    start_date = st.date_input("Start Date")
-    end_date = st.date_input("End Date")
-
-    if st.button("Run Backtest"):
-        results = run_backtest(strategy, start_date, end_date)
-        st.success("Backtest completed!")
-
-        md_risk = MaxDrawdownRisk(threshold=0.1)
-        vol_risk = VolatilityRisk(threshold=0.05)
-        drawdown_triggered = md_risk.evaluate(results["trades"])
-        volatility_triggered = vol_risk.evaluate(results["prices"])
-
-        st.subheader("Risk Checks")
-        if drawdown_triggered:
-            st.error("⚠️ Max Drawdown Risk Triggered!")
-        else:
-            st.success("✅ Max Drawdown within safe limits.")
-
-        if volatility_triggered:
-            st.error("⚠️ Volatility Risk Triggered!")
-        else:
-            st.success("✅ Volatility within safe limits.")
-
-        st.metric("Total Return", f"{results['total_return']:.2%}")
-        st.metric("Max Drawdown", f"{results['max_drawdown']:.2%}")
-        st.metric("Sharpe Ratio", f"{results['sharpe_ratio']:.2f}")
-
-        backtest_return.set(results["total_return"])
-        backtest_drawdown.set(results["max_drawdown"])
-
-        st.line_chart(pd.DataFrame(results["equity_curve"], columns=["Equity"]))
-
-# --- Main ---
-def main():
-    st.title("SAI Trading Cockpit")
-    tabs = st.tabs(["Dashboard", "Strategy Config", "Logs", "Model Testing", "Debug", "Backtest"])
-    with tabs[0]: dashboard_tab()
-    with tabs[1]: strategy_config_tab()
-    with tabs[2]: logs_tab()
-    with tabs[3]: model_testing_tab()
-    with tabs[4]: debug_tab()
-    with tabs[5]: backtest_tab()
-
-if __name__ == "__main__":
-    start_metrics_server(port=8000, registry=st.session_state.prom_registry)
-    if "trading_active" not in st.session_state:
-        st.session_state.trading_active = False
-    main()
+# Debug Tab
+with tabs[4]:
+    st.header("Debug Information")
+    st.write("Session State:", st.session_state)

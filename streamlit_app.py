@@ -20,7 +20,6 @@ st.markdown("""
 <style>
     .main { background-color: #0E1117; }
     .stApp { background-color: #0E1117; }
-    .css-1d391kg { background-color: #0E1117; }
     div[data-testid="stMetricValue"] {
         font-size: 1.8rem; font-weight: 700; color: #FFFFFF;
     }
@@ -44,12 +43,8 @@ st.markdown("""
     .rate-value {
         font-size: 2rem; font-weight: 700; color: #FFFFFF;
     }
-    .change-positive {
-        color: #00C853; font-weight: 600;
-    }
-    .change-negative {
-        color: #FF1744; font-weight: 600;
-    }
+    .change-positive { color: #00C853; font-weight: 600; }
+    .change-negative { color: #FF1744; font-weight: 600; }
     .section-title {
         font-size: 1.5rem; font-weight: 700; color: #FFFFFF;
         margin: 20px 0 10px 0; border-bottom: 2px solid #00F2FE;
@@ -70,7 +65,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# -------------------- Safe stub models (real plugins can override) --------------------
+# -------------------- Safe forecast stubs (fallback if plugins missing) --------------------
 def fit_arima(series, order=(2,1,2)):
     return {"last_value": series.iloc[-1], "std": series.std()}
 
@@ -83,10 +78,9 @@ def forecast_next(arima_model, steps=1):
 def fit_prophet(df_rates):
     df = df_rates.copy()
     df["ds_num"] = (df["ds"] - df["ds"].min()).dt.total_seconds() / 86400
+    slope = 0
     if len(df) > 1:
         slope = np.polyfit(df["ds_num"], df["y"], 1)[0]
-    else:
-        slope = 0
     return {"last_date": df["ds"].max(), "slope": slope, "last_y": df["y"].iloc[-1]}
 
 def forecast_future(prophet_model, periods=1, freq="D"):
@@ -121,11 +115,11 @@ def run_bot():
     }
 
 def load_model(file_obj):
-    """Load a pickled model ONLY after the user explicitly confirms they trust the file."""
+    """Load a pickled model ONLY after user confirmation."""
     try:
         return pickle.load(file_obj)
     except Exception as e:
-        logger.error(f"Failed to load model: {e}")
+        logger.error(f"Model load failed: {e}")
         return None
 
 def test_model(model):
@@ -142,7 +136,7 @@ handler.setFormatter(formatter)
 if not logger.handlers:
     logger.addHandler(handler)
 
-# -------------------- Session state init --------------------
+# -------------------- Session state initialization --------------------
 if "bot_thread" not in st.session_state:
     st.session_state.bot_thread = None
 if "bot_running" not in st.session_state:
@@ -213,7 +207,7 @@ def drain_bot_queue(max_items=50):
         st.session_state.logs = st.session_state.logs[-1000:]
     return drained
 
-# -------------------- East African currencies (including SSP) --------------------
+# -------------------- East African currencies --------------------
 EAST_AFRICAN_CURRENCIES = ["UGX", "KES", "TZS", "RWF", "BIF", "SSP", "ETB"]
 OTHER_CURRENCIES = ["USD", "EUR", "GBP", "JPY"]
 ALL_CURRENCIES = EAST_AFRICAN_CURRENCIES + OTHER_CURRENCIES
@@ -240,11 +234,8 @@ def sample_currency_rates():
         "ETB": (55, 60), "USD": (1, 1), "EUR": (0.9, 1.1),
         "GBP": (0.75, 0.85), "JPY": (140, 150)
     }
-    rates = {}
-    for cur in ALL_CURRENCIES:
-        low, high = ranges.get(cur, (100, 5000))
-        rates[cur] = round(random.uniform(low, high), 2)
-    return rates
+    return {cur: round(random.uniform(low, high), 2)
+            for cur, (low, high) in ranges.items()}
 
 def fetch_currency_data():
     real = get_real_rates()
@@ -268,44 +259,41 @@ def fetch_currency_data():
     return rates, delta
 
 def forecast_rates(rates):
-    return {cur: round(val * (1 + random.uniform(-0.02, 0.02)), 2) for cur, val in rates.items()}
+    return {cur: round(val * (1 + random.uniform(-0.02, 0.02)), 2)
+            for cur, val in rates.items()}
 
 def update_history(rates, forecast):
     now = datetime.now()
-    rows = []
-    for cur in rates.keys():
-        rows.append({
-            "Time": now.isoformat(),
-            "Currency": cur,
-            "Rate": rates[cur],
-            "Forecast": forecast[cur]
-        })
+    rows = [{"Time": now.isoformat(), "Currency": cur,
+             "Rate": rates[cur], "Forecast": forecast[cur]}
+            for cur in rates.keys()]
     if rows:
         st.session_state.history = pd.concat(
-            [st.session_state.history, pd.DataFrame(rows)], ignore_index=True
-        )
+            [st.session_state.history, pd.DataFrame(rows)], ignore_index=True)
         if len(st.session_state.history) > HISTORY_MAX_ROWS:
             st.session_state.history = st.session_state.history.iloc[-HISTORY_MAX_ROWS:].reset_index(drop=True)
 
 def generate_trade_signal(current_rate, forecast_value, threshold=0.01):
+    if forecast_value is None:
+        return "HOLD"
     change_pct = (forecast_value - current_rate) / current_rate
     if change_pct > threshold:
         return "BUY"
     elif change_pct < -threshold:
         return "SELL"
-    else:
-        return "HOLD"
+    return "HOLD"
 
-# -------------------- Forecast function (with fallback for low data) --------------------
+# -------------------- Central forecast function --------------------
 def run_forecast(currency, horizon, steps, freq="D"):
     df_all = st.session_state.history.copy()
     df_all["Time_dt"] = pd.to_datetime(df_all["Time"])
     df_cur = df_all[df_all["Currency"] == currency].sort_values("Time_dt")
 
-    # Fallback when not enough historical data
+    # Fallback for insufficient data
     if len(df_cur) < 20:
         current_rate = st.session_state.rates.get(currency, 1.0)
-        fallback_preds = [round(current_rate * (1 + random.uniform(-0.01, 0.01)), 2) for _ in range(steps)]
+        fallback_preds = [round(current_rate * (1 + random.uniform(-0.01, 0.01)), 2)
+                          for _ in range(steps)]
         return {
             "currency": currency,
             "current_rate": current_rate,
@@ -315,7 +303,7 @@ def run_forecast(currency, horizon, steps, freq="D"):
             "prophet_signal": None,
             "arima_all_preds": fallback_preds,
             "prophet_all_preds": None,
-            "arima_metrics": {"RMSE": None, "MAPE": None},
+            "arima_metrics": None,
             "prophet_metrics": None,
             "actual_test": [],
             "train": df_cur,
@@ -333,8 +321,8 @@ def run_forecast(currency, horizon, steps, freq="D"):
         arima_model = fit_arima(train["Rate"], order=(2,1,2))
         arima_pred = forecast_next(arima_model, steps=steps)
         arima_metrics = compute_metrics(actual_test, arima_pred[:len(actual_test)])
-    except Exception:
-        pass
+    except Exception as e:
+        logger.exception(f"ARIMA error for {currency}")
 
     prophet_pred = None
     prophet_metrics = None
@@ -344,12 +332,12 @@ def run_forecast(currency, horizon, steps, freq="D"):
         forecast_df = forecast_future(prophet_model, periods=steps, freq=freq)
         prophet_pred = forecast_df["yhat"].tolist()
         prophet_metrics = compute_metrics(actual_test, prophet_pred[:len(actual_test)])
-    except Exception:
-        pass
+    except Exception as e:
+        logger.exception(f"Prophet error for {currency}")
 
     current_rate = df_cur["Rate"].iloc[-1]
-    arima_signal = generate_trade_signal(current_rate, arima_pred[0]) if arima_pred else None
-    prophet_signal = generate_trade_signal(current_rate, prophet_pred[0]) if prophet_pred else None
+    arima_signal = generate_trade_signal(current_rate, arima_pred[0]) if arima_pred else "HOLD"
+    prophet_signal = generate_trade_signal(current_rate, prophet_pred[0]) if prophet_pred else "HOLD"
 
     return {
         "currency": currency,
@@ -395,7 +383,7 @@ tabs = st.tabs([
     "🛠️ Debug"
 ])
 
-with tabs[0]:
+with tabs[0]:  # Dashboard
     st.markdown("<div class='section-title'>🌍 East African Forex Rates (USD Base)</div>", unsafe_allow_html=True)
 
     rates, deltas = fetch_currency_data()
@@ -406,12 +394,8 @@ with tabs[0]:
     for i, cur in enumerate(EAST_AFRICAN_CURRENCIES):
         rate = rates.get(cur, 0)
         delta_val = deltas.get(cur)
-        if delta_val is not None:
-            delta_str = f"{delta_val:+.2f}%"
-            delta_class = "change-positive" if delta_val >= 0 else "change-negative"
-        else:
-            delta_str = "N/A"
-            delta_class = ""
+        delta_str = f"{delta_val:+.2f}%" if delta_val is not None else "N/A"
+        delta_class = "change-positive" if (delta_val and delta_val >= 0) else "change-negative" if delta_val else ""
         with cols[i % 4]:
             st.markdown(f"""
             <div class="forex-card">
@@ -434,7 +418,7 @@ with tabs[0]:
             if st.button("⏹️ Stop Bot", disabled=not st.session_state.bot_running):
                 stop_bot()
 
-        # Auto‑detect dead thread and reset state
+        # Automatic dead-thread detection
         if st.session_state.bot_thread and not st.session_state.bot_thread.is_alive() and st.session_state.bot_running:
             st.warning("Bot thread stopped unexpectedly. Resetting state.")
             st.session_state.bot_running = False
@@ -588,7 +572,6 @@ with tabs[6]:
     st.markdown("<div class='section-title'>📋 Application Logs</div>", unsafe_allow_html=True)
     try:
         with open("sai_app.log", "r") as f:
-            # memory‑efficient reading of the last 200 lines
             last_lines = deque(f, maxlen=200)
             st.text("".join(last_lines))
     except FileNotFoundError:
@@ -603,7 +586,6 @@ with tabs[7]:
     st.warning("⚠️ Only upload .pkl files you trust. Unpickling untrusted data can execute malicious code.")
     uploaded_model = st.file_uploader("Upload model.pkl", type=["pkl"])
     if uploaded_model:
-        # security: require explicit confirmation before unpickling
         trusted = st.checkbox("I understand the risk and trust this file.", key="trust_model")
         if trusted:
             uploaded_model.seek(0)
@@ -621,9 +603,10 @@ with tabs[7]:
 # --- Debug tab ---
 with tabs[8]:
     st.markdown("<div class='section-title'>🛠️ Debug</div>", unsafe_allow_html=True)
-    st.json({k: str(v) if not isinstance(v, (dict, list, int, float, bool, type(None))) else v for k, v in st.session_state.items()})
+    st.json({k: str(v) if not isinstance(v, (dict, list, int, float, bool, type(None))) else v
+             for k, v in st.session_state.items()})
 
-# Auto-refresh logic
+# -------------------- Auto-refresh logic --------------------
 if st.session_state.auto_refresh:
     drain_bot_queue(max_items=5)
     time.sleep(st.session_state.refresh_interval)

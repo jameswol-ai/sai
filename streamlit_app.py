@@ -3,7 +3,6 @@ import threading
 import time
 import logging
 import pandas as pd
-import matplotlib.pyplot as plt
 
 # Configure logging
 logging.basicConfig(
@@ -13,31 +12,41 @@ logging.basicConfig(
 )
 
 # Initialize session state
-if "trades" not in st.session_state:
-    st.session_state.trades = []
-if "prices" not in st.session_state:
-    st.session_state.prices = []
-if "running" not in st.session_state:
-    st.session_state.running = False
+defaults = {
+    "trades": [],
+    "prices": [],
+    "running": False,
+    "risk_limits": {"max_loss": 50, "max_exposure": 1000}
+}
+for key, val in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = val
 
-# Dummy trading loop
+# Trading loop with risk checks
 def trading_loop():
     while st.session_state.running:
         price = 100 + (time.time() % 10)  # mock price
         trade = {"time": time.strftime("%H:%M:%S"), "price": price}
         st.session_state.prices.append(price)
-        st.session_state.trades.append(trade)
-        logging.info(f"Trade executed: {trade}")
+
+        # Risk enforcement
+        if len(st.session_state.trades) < st.session_state["risk_limits"]["max_exposure"]:
+            st.session_state.trades.append(trade)
+            logging.info(f"Trade executed: {trade}")
+        else:
+            logging.warning("Exposure limit reached, trade skipped.")
+
         time.sleep(2)
 
 # Dashboard tab
 def dashboard_tab():
     st.header("Live Trading Dashboard")
-    if st.button("Start Trading") and not st.session_state.running:
+    col1, col2 = st.columns(2)
+    if col1.button("Start Trading") and not st.session_state.running:
         st.session_state.running = True
         threading.Thread(target=trading_loop, daemon=True).start()
         st.success("Trading loop started.")
-    if st.button("Stop Trading") and st.session_state.running:
+    if col2.button("Stop Trading") and st.session_state.running:
         st.session_state.running = False
         st.warning("Trading loop stopped.")
 
@@ -49,8 +58,8 @@ def dashboard_tab():
 # Strategy Config tab
 def strategy_tab():
     st.header("Strategy Configuration")
-    risk_level = st.slider("Risk Level", 1, 10, 5)
-    st.write(f"Selected Risk Level: {risk_level}")
+    st.session_state["risk_limits"]["max_loss"] = st.slider("Max Loss", 10, 100, 50)
+    st.session_state["risk_limits"]["max_exposure"] = st.slider("Max Exposure", 100, 5000, 1000)
     st.text_input("Strategy Name", "Default Strategy")
 
 # Logs tab
@@ -72,7 +81,11 @@ def model_tab():
 # Debug tab
 def debug_tab():
     st.header("Debugging Tools")
-    st.json({"trades": st.session_state.trades[-5:], "prices": st.session_state.prices[-5:]})
+    st.json({
+        "recent_trades": st.session_state.trades[-5:],
+        "recent_prices": st.session_state.prices[-5:],
+        "risk_limits": st.session_state["risk_limits"]
+    })
 
 # Main app
 def main():

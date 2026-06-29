@@ -182,3 +182,4 @@ with tabs[6]:
                 })
                 metrics_rows.append({
                     "Currency":cur,"Model":"Prophet",
+                    **compute_metrics(actual_vals,preds["Prophet"]

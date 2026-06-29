@@ -13,10 +13,9 @@ from collections import deque
 import queue
 import numpy as np
 import requests
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import os
 
-# -------------------- Custom CSS --------------------
+# -------------------- Custom CSS for modern forex dashboard --------------------
 st.markdown("""
 <style>
     .main { background-color: #0E1117; }
@@ -60,10 +59,13 @@ st.markdown("""
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(0,242,254,0.5);
     }
+    .trade-signal-buy { background-color: #00C853; color: black; padding: 4px 12px; border-radius: 12px; font-weight: bold; }
+    .trade-signal-sell { background-color: #FF1744; color: white; padding: 4px 12px; border-radius: 12px; font-weight: bold; }
+    .trade-signal-hold { background-color: #FFD600; color: black; padding: 4px 12px; border-radius: 12px; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
-# -------------------- Safe forecast stubs --------------------
+# -------------------- Safe forecast stubs (fallback if plugins missing) --------------------
 def fit_arima(series, order=(2,1,2)):
     return {"last_value": series.iloc[-1], "std": series.std()}
 
@@ -113,6 +115,7 @@ def run_bot():
     }
 
 def load_model(file_obj):
+    """Load a pickled model ONLY after user confirmation."""
     try:
         return pickle.load(file_obj)
     except Exception as e:
@@ -133,7 +136,7 @@ handler.setFormatter(formatter)
 if not logger.handlers:
     logger.addHandler(handler)
 
-# -------------------- Session state --------------------
+# -------------------- Session state initialization --------------------
 if "bot_thread" not in st.session_state:
     st.session_state.bot_thread = None
 if "bot_running" not in st.session_state:
@@ -286,6 +289,7 @@ def run_forecast(currency, horizon, steps, freq="D"):
     df_all["Time_dt"] = pd.to_datetime(df_all["Time"])
     df_cur = df_all[df_all["Currency"] == currency].sort_values("Time_dt")
 
+    # Fallback for insufficient data
     if len(df_cur) < 20:
         current_rate = st.session_state.rates.get(currency, 1.0)
         fallback_preds = [round(current_rate * (1 + random.uniform(-0.01, 0.01)), 2)
@@ -317,8 +321,8 @@ def run_forecast(currency, horizon, steps, freq="D"):
         arima_model = fit_arima(train["Rate"], order=(2,1,2))
         arima_pred = forecast_next(arima_model, steps=steps)
         arima_metrics = compute_metrics(actual_test, arima_pred[:len(actual_test)])
-    except Exception:
-        pass
+    except Exception as e:
+        logger.exception(f"ARIMA error for {currency}")
 
     prophet_pred = None
     prophet_metrics = None
@@ -328,8 +332,8 @@ def run_forecast(currency, horizon, steps, freq="D"):
         forecast_df = forecast_future(prophet_model, periods=steps, freq=freq)
         prophet_pred = forecast_df["yhat"].tolist()
         prophet_metrics = compute_metrics(actual_test, prophet_pred[:len(actual_test)])
-    except Exception:
-        pass
+    except Exception as e:
+        logger.exception(f"Prophet error for {currency}")
 
     current_rate = df_cur["Rate"].iloc[-1]
     arima_signal = generate_trade_signal(current_rate, arima_pred[0]) if arima_pred else "HOLD"
@@ -352,42 +356,6 @@ def run_forecast(currency, horizon, steps, freq="D"):
         "warning": None
     }
 
-# -------------------- Technical Indicators --------------------
-def compute_indicators(df_cur, rsi_period=14, sma_windows=[20, 50],
-                       macd_fast=12, macd_slow=26, macd_signal=9,
-                       bb_period=20, bb_std=2):
-    df = df_cur.copy().sort_values("Time_dt")
-    if len(df) < max(rsi_period, macd_slow, bb_period) + 1:
-        return None
-
-    # RSI
-    delta = df["Rate"].diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-    avg_gain = gain.rolling(window=rsi_period, min_periods=rsi_period).mean()
-    avg_loss = loss.rolling(window=rsi_period, min_periods=rsi_period).mean()
-    rs = avg_gain / avg_loss
-    df["RSI"] = 100 - (100 / (1 + rs))
-
-    # SMAs
-    for w in sma_windows:
-        df[f"SMA_{w}"] = df["Rate"].rolling(window=w, min_periods=w).mean()
-
-    # MACD
-    ema_fast = df["Rate"].ewm(span=macd_fast, min_periods=macd_fast).mean()
-    ema_slow = df["Rate"].ewm(span=macd_slow, min_periods=macd_slow).mean()
-    df["MACD"] = ema_fast - ema_slow
-    df["MACD_signal"] = df["MACD"].ewm(span=macd_signal, min_periods=macd_signal).mean()
-    df["MACD_hist"] = df["MACD"] - df["MACD_signal"]
-
-    # Bollinger Bands
-    df["BB_middle"] = df["Rate"].rolling(window=bb_period, min_periods=bb_period).mean()
-    bb_std_dev = df["Rate"].rolling(window=bb_period, min_periods=bb_period).std()
-    df["BB_upper"] = df["BB_middle"] + bb_std * bb_std_dev
-    df["BB_lower"] = df["BB_middle"] - bb_std * bb_std_dev
-
-    return df
-
 # -------------------- Streamlit UI --------------------
 st.set_page_config(page_title="SAI Forex Bot - East Africa", layout="wide")
 
@@ -409,16 +377,15 @@ tabs = st.tabs([
     "📆 Weekly Forecast",
     "🗓️ Monthly Forecast",
     "📈 Trade Recommendations",
-    "📉 Technical Analysis",
     "⚙️ Strategy Config",
     "📋 Logs",
     "🧪 Model Testing",
     "🛠️ Debug"
 ])
 
-# --- Dashboard ---
-with tabs[0]:
+with tabs[0]:  # Dashboard
     st.markdown("<div class='section-title'>🌍 East African Forex Rates (USD Base)</div>", unsafe_allow_html=True)
+
     rates, deltas = fetch_currency_data()
     forecast = forecast_rates(rates)
     update_history(rates, forecast)
@@ -451,6 +418,7 @@ with tabs[0]:
             if st.button("⏹️ Stop Bot", disabled=not st.session_state.bot_running):
                 stop_bot()
 
+        # Automatic dead-thread detection
         if st.session_state.bot_thread and not st.session_state.bot_thread.is_alive() and st.session_state.bot_running:
             st.warning("Bot thread stopped unexpectedly. Resetting state.")
             st.session_state.bot_running = False
@@ -474,31 +442,25 @@ with tabs[0]:
 
     if not st.session_state.history.empty:
         st.markdown("<div class='section-title'>📉 East African Rate Trends</div>", unsafe_allow_html=True)
-        # Interactive Plotly chart instead of Matplotlib
-        fig2 = go.Figure()
+        fig2, ax2 = plt.subplots(figsize=(10, 5))
         df_plot = st.session_state.history.copy()
         df_plot["Time_dt"] = pd.to_datetime(df_plot["Time"])
-        colors = ['#00F2FE', '#FFD600', '#FF1744', '#00C853', '#FF9100', '#D500F9', '#2979FF']
+        colors = plt.cm.tab10.colors
         for idx, cur in enumerate(EAST_AFRICAN_CURRENCIES):
             cur_data = df_plot[df_plot["Currency"] == cur].tail(100)
             if not cur_data.empty:
-                fig2.add_trace(go.Scatter(
-                    x=cur_data["Time_dt"], y=cur_data["Rate"],
-                    mode='lines', name=cur,
-                    line=dict(color=colors[idx % len(colors)]),
-                    hovertemplate=f'{cur}: %{{y:,.2f}}<extra></extra>'
-                ))
-        fig2.update_layout(
-            template="plotly_dark",
-            hovermode="x unified",
-            title="East African Currencies – Recent Trends",
-            xaxis_title="Time",
-            yaxis_title="Rate (USD base)",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-        )
-        st.plotly_chart(fig2, use_container_width=True)
+                ax2.plot(cur_data["Time_dt"], cur_data["Rate"], label=cur, color=colors[idx % len(colors)])
+        ax2.legend(loc="upper left", bbox_to_anchor=(1, 1))
+        ax2.set_title("East African Currencies – Recent Trends", color='white')
+        ax2.set_xlabel("Time", color='white')
+        ax2.set_ylabel("Rate (USD base)", color='white')
+        ax2.tick_params(colors='white')
+        ax2.set_facecolor('#0E1117')
+        fig2.patch.set_facecolor('#0E1117')
+        plt.xticks(rotation=45)
+        st.pyplot(fig2)
 
-# --- Daily Forecast (unchanged) ---
+# --- Daily Forecast tab ---
 with tabs[1]:
     st.markdown("<div class='section-title'>📅 Daily Forecast (Next Day)</div>", unsafe_allow_html=True)
     currency = st.selectbox("Select Currency", EAST_AFRICAN_CURRENCIES, key="daily_cur")
@@ -517,7 +479,7 @@ with tabs[1]:
         if result['prophet_metrics']:
             st.caption(f"Prophet Backtest RMSE: {result['prophet_metrics']['RMSE']}, MAPE: {result['prophet_metrics']['MAPE']}%")
 
-# --- Weekly Forecast (unchanged) ---
+# --- Weekly Forecast tab ---
 with tabs[2]:
     st.markdown("<div class='section-title'>📆 Weekly Forecast (7 Days)</div>", unsafe_allow_html=True)
     currency = st.selectbox("Select Currency", EAST_AFRICAN_CURRENCIES, key="weekly_cur")
@@ -540,7 +502,7 @@ with tabs[2]:
         st.pyplot(fig)
         st.write(f"ARIMA Signal: **{result['arima_signal']}**  |  Prophet Signal: **{result['prophet_signal']}**")
 
-# --- Monthly Forecast (unchanged) ---
+# --- Monthly Forecast tab ---
 with tabs[3]:
     st.markdown("<div class='section-title'>🗓️ Monthly Forecast (30 Days)</div>", unsafe_allow_html=True)
     currency = st.selectbox("Select Currency", EAST_AFRICAN_CURRENCIES, key="monthly_cur")
@@ -562,12 +524,13 @@ with tabs[3]:
         st.pyplot(fig)
         st.write(f"ARIMA Signal: **{result['arima_signal']}**  |  Prophet Signal: **{result['prophet_signal']}**")
 
-# --- Trade Recommendations (unchanged) ---
+# --- Trade Recommendations tab ---
 with tabs[4]:
     st.markdown("<div class='section-title'>📊 Trade Recommendations</div>", unsafe_allow_html=True)
     horizon = st.radio("Horizon", ["Daily", "Weekly", "Monthly"], horizontal=True)
     steps_map = {"Daily": 1, "Weekly": 7, "Monthly": 30}
     steps = steps_map[horizon]
+
     if st.button("Get Trade Signals for East Africa"):
         signals = []
         fallback_used = False
@@ -586,7 +549,7 @@ with tabs[4]:
                 })
         if signals:
             if fallback_used:
-                st.warning("Some forecasts use a rough estimate because historical data is insufficient.")
+                st.warning("Some forecasts use a rough estimate because historical data is insufficient. Keep the dashboard running to build history.")
             df_signals = pd.DataFrame(signals)
             def highlight_signal(val):
                 if val == 'BUY':
@@ -594,154 +557,18 @@ with tabs[4]:
                 elif val == 'SELL':
                     return 'background-color: #FF1744; color: white'
                 return ''
-            st.dataframe(df_signals.style.applymap(highlight_signal, subset=['ARIMA Signal', 'Prophet Signal']),
-                         use_container_width=True)
+            st.dataframe(df_signals.style.applymap(highlight_signal, subset=['ARIMA Signal', 'Prophet Signal']), use_container_width=True)
         else:
             st.warning("No signals generated.")
 
-# --- Technical Analysis (ENHANCED with MACD + Bollinger Bands) ---
+# --- Strategy Config tab ---
 with tabs[5]:
-    st.markdown("<div class='section-title'>📉 Technical Indicators</div>", unsafe_allow_html=True)
-    if st.session_state.history.empty:
-        st.info("No historical data yet. Start the bot to collect data.")
-    else:
-        currency = st.selectbox("Select Currency", EAST_AFRICAN_CURRENCIES, key="tech_cur")
-        df_all = st.session_state.history.copy()
-        df_all["Time_dt"] = pd.to_datetime(df_all["Time"])
-        df_cur = df_all[df_all["Currency"] == currency].sort_values("Time_dt")
-
-        if len(df_cur) < 30:  # enough for all indicators
-            st.warning(f"Need at least 30 data points for reliable indicators. Currently have {len(df_cur)}.")
-        else:
-            ind_df = compute_indicators(df_cur)
-            if ind_df is None:
-                st.error("Unable to compute indicators.")
-            else:
-                latest = ind_df.iloc[-1]
-                st.subheader(f"{currency} – Latest Indicator Values")
-                col1, col2, col3, col4 = st.columns(4)
-                col1.metric("Rate", f"{latest['Rate']:,.2f}")
-                col2.metric("RSI (14)", f"{latest['RSI']:.2f}")
-                col3.metric("MACD", f"{latest['MACD']:.5f}")
-                col4.metric("Signal", f"{latest['MACD_signal']:.5f}")
-                col5, col6, col7, _ = st.columns(4)
-                col5.metric("Bollinger Upper", f"{latest['BB_upper']:,.2f}")
-                col6.metric("Bollinger Middle", f"{latest['BB_middle']:,.2f}")
-                col7.metric("Bollinger Lower", f"{latest['BB_lower']:,.2f}")
-
-                # Create interactive multi-panel chart
-                fig = make_subplots(
-                    rows=4, cols=1,
-                    shared_xaxes=True,
-                    vertical_spacing=0.03,
-                    row_heights=[0.5, 0.2, 0.15, 0.15],
-                    subplot_titles=("Price & Bollinger Bands", "RSI", "MACD", "Volume (simulated)")
-                )
-
-                # Price with Bollinger Bands
-                fig.add_trace(go.Scatter(
-                    x=ind_df["Time_dt"], y=ind_df["Rate"],
-                    mode='lines', name='Rate',
-                    line=dict(color='#00F2FE', width=2)
-                ), row=1, col=1)
-                fig.add_trace(go.Scatter(
-                    x=ind_df["Time_dt"], y=ind_df["BB_upper"],
-                    mode='lines', name='BB Upper',
-                    line=dict(color='gray', dash='dot')
-                ), row=1, col=1)
-                fig.add_trace(go.Scatter(
-                    x=ind_df["Time_dt"], y=ind_df["BB_middle"],
-                    mode='lines', name='BB Middle',
-                    line=dict(color='orange', dash='dot')
-                ), row=1, col=1)
-                fig.add_trace(go.Scatter(
-                    x=ind_df["Time_dt"], y=ind_df["BB_lower"],
-                    mode='lines', name='BB Lower',
-                    line=dict(color='gray', dash='dot')
-                ), row=1, col=1)
-
-                # RSI
-                fig.add_trace(go.Scatter(
-                    x=ind_df["Time_dt"], y=ind_df["RSI"],
-                    mode='lines', name='RSI',
-                    line=dict(color='#FFD600', width=1.5)
-                ), row=2, col=1)
-                fig.add_hline(y=70, line_dash="dash", line_color="red", row=2, col=1)
-                fig.add_hline(y=30, line_dash="dash", line_color="green", row=2, col=1)
-
-                # MACD
-                fig.add_trace(go.Scatter(
-                    x=ind_df["Time_dt"], y=ind_df["MACD"],
-                    mode='lines', name='MACD',
-                    line=dict(color='blue')
-                ), row=3, col=1)
-                fig.add_trace(go.Scatter(
-                    x=ind_df["Time_dt"], y=ind_df["MACD_signal"],
-                    mode='lines', name='Signal',
-                    line=dict(color='red')
-                ), row=3, col=1)
-                colors_hist = ['green' if val >= 0 else 'red' for val in ind_df["MACD_hist"]]
-                fig.add_trace(go.Bar(
-                    x=ind_df["Time_dt"], y=ind_df["MACD_hist"],
-                    name='Histogram',
-                    marker_color=colors_hist
-                ), row=3, col=1)
-
-                # Volume (simulated as random, just for demo)
-                np.random.seed(42)
-                vol = np.random.randint(500, 2000, size=len(ind_df))
-                fig.add_trace(go.Bar(
-                    x=ind_df["Time_dt"], y=vol,
-                    name='Volume',
-                    marker_color='#7F7F7F'
-                ), row=4, col=1)
-
-                fig.update_layout(
-                    height=900,
-                    template="plotly_dark",
-                    showlegend=True,
-                    hovermode="x unified"
-                )
-                fig.update_xaxes(title_text="Time", row=4, col=1)
-                fig.update_yaxes(title_text="Rate", row=1, col=1)
-                fig.update_yaxes(title_text="RSI", range=[0, 100], row=2, col=1)
-                fig.update_yaxes(title_text="MACD", row=3, col=1)
-                fig.update_yaxes(title_text="Volume", row=4, col=1)
-
-                st.plotly_chart(fig, use_container_width=True)
-
-                # Interpretation
-                rsi_val = latest['RSI']
-                if rsi_val > 70:
-                    st.warning(f"RSI overbought ({rsi_val:.1f}) – consider SELL.")
-                elif rsi_val < 30:
-                    st.success(f"RSI oversold ({rsi_val:.1f}) – consider BUY.")
-                else:
-                    st.info(f"RSI neutral ({rsi_val:.1f})")
-
-                macd_val = latest['MACD']
-                sig_val = latest['MACD_signal']
-                if pd.notna(macd_val) and pd.notna(sig_val):
-                    if macd_val > sig_val:
-                        st.write("MACD is **above** signal line – bullish.")
-                    else:
-                        st.write("MACD is **below** signal line – bearish.")
-
-                # Bollinger squeeze detection (simple)
-                bb_width = latest['BB_upper'] - latest['BB_lower']
-                if bb_width < 0.02 * latest['Rate']:  # 2% of price
-                    st.write("Bollinger Bands are **squeezing** – breakout possible.")
-                else:
-                    st.write("Bollinger Bands are normal.")
-
-# --- Strategy Config (unchanged) ---
-with tabs[6]:
     st.markdown("<div class='section-title'>⚙️ Strategy Configuration</div>", unsafe_allow_html=True)
     risk_level = st.slider("Risk Level", 1, 10, 5)
     st.info("Risk level will be used in future trading logic.")
 
-# --- Logs (unchanged) ---
-with tabs[7]:
+# --- Logs tab ---
+with tabs[6]:
     st.markdown("<div class='section-title'>📋 Application Logs</div>", unsafe_allow_html=True)
     try:
         with open("sai_app.log", "r") as f:
@@ -749,11 +576,14 @@ with tabs[7]:
             st.text("".join(last_lines))
     except FileNotFoundError:
         st.info("No logs yet.")
+    except Exception as e:
+        st.error("Unable to read log file.")
+        logger.exception("Error reading log file in Logs tab")
 
-# --- Model Testing (unchanged) ---
-with tabs[8]:
+# --- Model Testing tab ---
+with tabs[7]:
     st.markdown("<div class='section-title'>🧪 Model Testing</div>", unsafe_allow_html=True)
-    st.warning("⚠️ Only upload .pkl files you trust.")
+    st.warning("⚠️ Only upload .pkl files you trust. Unpickling untrusted data can execute malicious code.")
     uploaded_model = st.file_uploader("Upload model.pkl", type=["pkl"])
     if uploaded_model:
         trusted = st.checkbox("I understand the risk and trust this file.", key="trust_model")
@@ -770,13 +600,13 @@ with tabs[8]:
         else:
             st.info("Please confirm that you trust the uploaded file to continue.")
 
-# --- Debug (unchanged) ---
-with tabs[9]:
+# --- Debug tab ---
+with tabs[8]:
     st.markdown("<div class='section-title'>🛠️ Debug</div>", unsafe_allow_html=True)
     st.json({k: str(v) if not isinstance(v, (dict, list, int, float, bool, type(None))) else v
              for k, v in st.session_state.items()})
 
-# Auto-refresh
+# -------------------- Auto-refresh logic --------------------
 if st.session_state.auto_refresh:
     drain_bot_queue(max_items=5)
     time.sleep(st.session_state.refresh_interval)

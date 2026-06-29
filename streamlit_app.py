@@ -176,5 +176,9 @@ with tabs[6]:
         for cur,preds in results.items():
             actual_vals=st.session_state.history[st.session_state.history["Currency"]==cur]["Rate"].values[-steps:]
             if len(actual_vals)>=steps:
-                metrics_rows.append({"Currency":cur,"Model":"ARIMA",
-                                     **compute_metrics(actual_vals,preds["ARIMA"][:steps])
+                metrics_rows.append({
+                    "Currency":cur,"Model":"ARIMA",
+                    **compute_metrics(actual_vals,preds["ARIMA"][:steps])
+                })
+                metrics_rows.append({
+                    "Currency":cur,"Model":"Prophet",

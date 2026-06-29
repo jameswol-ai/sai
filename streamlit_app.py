@@ -122,7 +122,9 @@ with tabs[0]:
     if st.sidebar.button("Stop Bot"): stop_bot()
     st.sidebar.checkbox("Auto Refresh", key="auto_refresh")
     st.sidebar.slider("Refresh Interval (sec)",1,10,st.session_state.refresh_interval,key="refresh_interval")
-    if st.session_state.auto_refresh: st_autorefresh(interval=st.session_state.refresh_interval*1000)
+    # ✅ Fixed auto-refresh
+    if st.session_state.auto_refresh:
+        st.experimental_autorefresh(interval=st.session_state.refresh_interval * 1000)
     drain_bot_queue()
     if not st.session_state.history.empty:
         st.subheader("Recent Trades"); st.dataframe(st.session_state.history.tail(20))
@@ -163,7 +165,4 @@ with tabs[6]:
             actual_vals=st.session_state.history[st.session_state.history["Currency"]==cur]["Rate"].values[-steps:]
             if len(actual_vals)>=steps:
                 metrics_rows.append({"Currency":cur,"Model":"ARIMA",**compute_metrics(actual_vals,preds["ARIMA"][:steps])})
-                metrics_rows.append({"Currency":cur,"Model":"Prophet",**compute_metrics(actual_vals,preds["Prophet"][:steps])})
-        if metrics_rows:
-            df_metrics=pd.DataFrame(metrics_rows)
-            df
+                metrics_rows.append({"Currency":cur,"Model":"Prophet",**compute_metrics(actual_vals,preds["Prophet"][:steps

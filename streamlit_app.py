@@ -20,8 +20,7 @@ import warnings
 import sqlite3
 from typing import Dict, List, Optional, Any, Tuple
 
-#───────────────────────────── SAI Intelligence
-──────────────────────────────#
+#SAI Intelligence#
 
 Market Status
 🟢 Bullish

@@ -35,5 +35,19 @@ def fetch_news_sentiment():
         return None
 
 
-if not NEWS_API_KEY:
-    st.warning("News sentiment unavailable")
+try:
+    from newsapi import NewsApiClient
+    from textblob import TextBlob
+
+    api_key = os.getenv("NEWS_API_KEY")
+
+    if api_key:
+        newsapi = NewsApiClient(api_key=api_key)
+        # Run sentiment analysis
+    else:
+        st.info("News API key not configured. Sentiment analysis disabled.")
+
+except ImportError:
+    st.info("newsapi-python or textblob is not installed. Sentiment analysis disabled.")
+except Exception as e:
+    st.warning(f"News sentiment error: {e}")

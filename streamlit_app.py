@@ -1,5 +1,5 @@
 # =========================================================
-# SAI Forex Bot – Clean Architecture (Fixed Version)
+# SAI Forex Bot – CLEAN STABLE ARCHITECTURE BUILD
 # =========================================================
 
 import streamlit as st
@@ -22,81 +22,64 @@ import sqlite3
 from typing import Dict, List, Optional, Any, Tuple
 
 # =========================================================
-# PAGE CONFIG (MUST BE FIRST STREAMLIT CALL)
+# PAGE CONFIG (ONLY ONCE)
 # =========================================================
 st.set_page_config(page_title="SAI Forex Bot", layout="wide")
 
 # =========================================================
-# OPTIONAL LIBRARIES
+# LOGGER (MUST BE FIRST – FIXED CRASH SOURCE)
+# =========================================================
+logger = logging.getLogger("sai_app")
+logger.setLevel(logging.INFO)
+
+handler = RotatingFileHandler("sai_app.log", maxBytes=2_000_000, backupCount=3)
+formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+handler.setFormatter(formatter)
+
+if not logger.handlers:
+    logger.addHandler(handler)
+
+# =========================================================
+# OPTIONAL IMPORTS (SAFE MODE)
 # =========================================================
 try:
     import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
     import plotly.express as px
+    from plotly.subplots import make_subplots
     PLOTLY_AVAILABLE = True
-except ImportError:
+except:
     PLOTLY_AVAILABLE = False
 
 try:
     from newsapi import NewsApiClient
     from textblob import TextBlob
     SENTIMENT_AVAILABLE = True
-except ImportError:
+except:
     SENTIMENT_AVAILABLE = False
 
 try:
     from streamlit_autorefresh import st_autorefresh
     AUTOREFRESH_AVAILABLE = True
-except ImportError:
+except:
     AUTOREFRESH_AVAILABLE = False
 
 # =========================================================
-# GLOBAL CONFIG
+# GLOBAL STATE
 # =========================================================
 BOT_CONFIG = {
     "alert_errors": False,
     "lock": threading.Lock()
 }
 
-# =========================================================
-# LOGGING
-# =========================================================
-logger = logging.getLogger("sai_app")
-logger.setLevel(logging.INFO)
-handler = RotatingFileHandler("sai_app.log", maxBytes=2_000_000, backupCount=3)
-handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
-if not logger.handlers:
-    logger.addHandler(handler)
-
-# =========================================================
-# SESSION STATE DEFAULTS
-# =========================================================
-defaults = {
-    "bot_running": False,
-    "bot_queue": queue.Queue(),
-    "stop_event": threading.Event(),
-    "logs": [],
-    "history": pd.DataFrame(),
-    "rates": {},
-    "alert_errors": False,
-    "alert_signals": False,
-    "use_auto_arima": False,
-    "auto_refresh": False,
-    "refresh_interval": 3,
-    "risk_level": 5,
-    "db_initialised": False
-}
-
-for k, v in defaults.items():
-    if k not in st.session_state:
-        st.session_state[k] = v
-
-# =========================================================
-# DATABASE
-# =========================================================
 DB_PATH = "sai_trading.db"
 DB_LOCK = threading.Lock()
 
+ALL_CURRENCIES = ["UGX","KES","TZS","RWF","BIF","SSP","ETB","USD","EUR","GBP","JPY"]
+EAST_AFRICAN_CURRENCIES = ["UGX","KES","TZS","RWF","BIF","SSP","ETB"]
+
+# =========================================================
+# DB INIT
+# =========================================================
 def db_connect():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL;")
@@ -105,157 +88,108 @@ def db_connect():
 def init_db():
     conn = db_connect()
     conn.executescript("""
-        CREATE TABLE IF NOT EXISTS bot_logs (
+        CREATE TABLE IF NOT EXISTS history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             time TEXT,
-            trade TEXT,
-            symbol TEXT,
-            amount REAL,
-            error TEXT
+            currency TEXT,
+            rate REAL,
+            forecast REAL
         );
     """)
     conn.commit()
     conn.close()
 
-if not st.session_state.db_initialised:
-    init_db()
-    st.session_state.db_initialised = True
-
 # =========================================================
-# MARKET DATA (SIMULATED)
+# SAFE RATE ENGINE
 # =========================================================
-CURRENCIES = ["UGX","KES","TZS","RWF","BIF","SSP","ETB","USD","EUR","GBP","JPY"]
+@st.cache_data(ttl=5)
+def get_real_rates():
+    try:
+        url = "https://api.frankfurter.app/latest?from=USD&to=" + ",".join(ALL_CURRENCIES)
+        r = requests.get(url, timeout=5)
+        data = r.json()
+        rates = data.get("rates", {})
+        rates["USD"] = 1.0
+        return rates
+    except Exception as e:
+        logger.warning(f"Rate fetch failed: {e}")
+        return {}
 
 def sample_rates():
-    ranges = {
-        "UGX": (3700,3900), "KES": (125,140), "TZS": (2500,2700),
-        "RWF": (1300,1500), "BIF": (2800,3000), "SSP": (1500,1800),
-        "ETB": (55,60), "USD": (1,1), "EUR": (0.9,1.1),
-        "GBP": (0.75,0.85), "JPY": (140,150)
-    }
-    return {k: round(random.uniform(*v),2) for k,v in ranges.items()}
+    return {c: round(random.uniform(1, 1000), 2) for c in ALL_CURRENCIES}
 
 # =========================================================
-# BOT ENGINE
+# LIVE STATE
+# =========================================================
+if "live" not in st.session_state:
+    st.session_state.live = {"rates": {}, "prev": {}, "lock": threading.Lock()}
+
+def live_fetch():
+    while True:
+        rates = get_real_rates() or sample_rates()
+        with st.session_state.live["lock"]:
+            st.session_state.live["prev"] = st.session_state.live["rates"]
+            st.session_state.live["rates"] = rates
+        time.sleep(3)
+
+if "thread_started" not in st.session_state:
+    t = threading.Thread(target=live_fetch, daemon=True)
+    t.start()
+    st.session_state.thread_started = True
+
+def get_rates():
+    with st.session_state.live["lock"]:
+        return (
+            st.session_state.live["rates"],
+            st.session_state.live["prev"]
+        )
+
+# =========================================================
+# BOT SIMULATION (SAFE)
 # =========================================================
 def run_bot():
     return {
         "time": datetime.now().isoformat(),
         "trade": random.choice(["BUY","SELL"]),
-        "symbol": random.choice(CURRENCIES),
+        "symbol": random.choice(ALL_CURRENCIES),
         "amount": random.randint(100,5000)
     }
-
-def bot_loop(q, stop_event):
-    while not stop_event.is_set():
-        try:
-            q.put(run_bot())
-        except Exception as e:
-            logger.error(e)
-        time.sleep(2)
-
-def start_bot():
-    if st.session_state.bot_running:
-        return
-    st.session_state.stop_event = threading.Event()
-    t = threading.Thread(
-        target=bot_loop,
-        args=(st.session_state.bot_queue, st.session_state.stop_event),
-        daemon=True
-    )
-    st.session_state.bot_running = True
-    t.start()
-
-def stop_bot():
-    st.session_state.stop_event.set()
-    st.session_state.bot_running = False
-
-def drain_queue():
-    while not st.session_state.bot_queue.empty():
-        item = st.session_state.bot_queue.get()
-        st.session_state.logs.append(item)
-
-# =========================================================
-# NEWS SENTIMENT (FIXED)
-# =========================================================
-def fetch_news_sentiment():
-    if not SENTIMENT_AVAILABLE:
-        return None
-    try:
-        api_key = st.secrets.get("NEWS_API_KEY", None)
-        if not api_key:
-            return None
-
-        api = NewsApiClient(api_key=api_key)
-        data = api.get_everything(q="forex Africa", language="en", page_size=5)
-
-        scores = []
-        for a in data["articles"]:
-            text = (a["title"] or "") + (a["description"] or "")
-            scores.append(TextBlob(text).sentiment.polarity)
-
-        return {
-            "score": float(np.mean(scores)) if scores else 0,
-            "interpretation": "Bullish" if np.mean(scores) > 0 else "Bearish"
-        }
-    except Exception as e:
-        logger.error(e)
-        return None
 
 # =========================================================
 # UI
 # =========================================================
-st.title("📊 SAI Forex Bot")
+st.title("📊 SAI Forex Bot (Clean Core)")
 
-st.markdown("### Intelligence Panel")
+rates, prev = get_rates()
 
-col1, col2 = st.columns(2)
+cols = st.columns(4)
 
-with col1:
-    st.metric("Market Status", "Bullish 🟢")
+for i, c in enumerate(EAST_AFRICAN_CURRENCIES):
+    with cols[i % 4]:
+        r = rates.get(c, 0)
+        p = prev.get(c, r)
+        delta = ((r - p) / p * 100) if p else 0
 
-with col2:
-    st.metric("Confidence", "87%")
+        st.metric(
+            label=f"USD/{c}",
+            value=f"{r:.2f}",
+            delta=f"{delta:.2f}%"
+        )
 
-# =========================================================
-# LIVE DATA
-# =========================================================
-rates = sample_rates()
-st.session_state.rates = rates
-
-st.markdown("### Rates")
-
-for k,v in rates.items():
-    st.write(f"{k}: {v}")
+st.markdown("---")
 
 # =========================================================
-# BOT CONTROLS
+# SIMPLE BOT TRIGGER
 # =========================================================
-st.markdown("### Bot Controls")
-
-c1, c2 = st.columns(2)
-
-with c1:
-    if st.button("Start Bot"):
-        start_bot()
-
-with c2:
-    if st.button("Stop Bot"):
-        stop_bot()
-
-drain_queue()
-
-st.markdown("### Logs")
-st.write(st.session_state.logs[-10:])
+if st.button("Run Bot Tick"):
+    result = run_bot()
+    st.json(result)
 
 # =========================================================
-# NEWS PANEL (SAFE CALL)
+# DEBUG
 # =========================================================
-st.markdown("### News Sentiment")
-
-sent = fetch_news_sentiment()
-if sent:
-    st.metric("Sentiment Score", round(sent["score"], 3))
-    st.write(sent["interpretation"])
-else:
-    st.info("Sentiment unavailable")
+with st.expander("Debug State"):
+    st.json({
+        "rates": rates,
+        "prev": prev
+    })

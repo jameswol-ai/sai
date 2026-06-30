@@ -33,3 +33,7 @@ def fetch_news_sentiment():
     except Exception as e:
         logger.error(f"News sentiment error: {e}")
         return None
+
+
+if not NEWS_API_KEY:
+    st.warning("News sentiment unavailable")

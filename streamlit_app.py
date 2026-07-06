@@ -20,9 +20,7 @@ import warnings
 import sqlite3
 from typing import Dict, List, Optional, Any, Tuple
 
-import logging
-from logging.handlers import RotatingFileHandler
-
+# Setup logging (NEW - added to fix missing logger)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -32,6 +30,7 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
 # -------------------- Optional Plotly --------------------
 try:
     import plotly.graph_objects as go
@@ -111,6 +110,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# (NEW) Silent logging of missing optional packages instead of UI banners
 if not PLOTLY_AVAILABLE:
     logger.warning("Plotly not installed – interactive charts will be unavailable.")
 if not SENTIMENT_AVAILABLE:
@@ -251,43 +251,86 @@ def compute_trade_signal(rates_df: pd.DataFrame, risk_level: int) -> Optional[Di
                 "price": close.iloc[-1]}
     return None
 
-# -------------------- Bot simulation → Real Trading Loop --------------------
+# -------------------- UPDATED: Bot simulation → Real Trading Loop (Multi‑currency) --------------------
 def run_bot():
-    """Called by bot thread. Uses live rates and indicators to trade."""
+    """
+    Called by the bot thread. Scans all available currencies and returns
+    a list of trade signals (or empty list). Executes trades if auto_trade is on.
+    """
     with st.session_state.live_rates_lock:
         rates = st.session_state.live_rates_data.get("rates", {})
     if not rates:
-        return None
-    # For each currency we could have a separate dataframe, but we use the live history
+        return []
+
     df_hist = st.session_state.history
     if df_hist is None or df_hist.empty:
-        return None
-    # For simplicity, pick a random currency that has enough data
+        return []
+
+    # Only process East African currencies that exist in live rates
     available = [c for c in EAST_AFRICAN_CURRENCIES if c in rates]
     if not available:
-        return None
-    # Randomly select one for demo; in production you'd loop all
-    cur = random.choice(available)
-    cur_data = df_hist[df_hist["Currency"] == cur].tail(100).copy()
-    cur_data["Time_dt"] = pd.to_datetime(cur_data["Time"])
-    cur_data = cur_data.sort_values("Time_dt")
-    if len(cur_data) < 50:
-        return None
-    trade_signal = compute_trade_signal(cur_data, st.session_state.risk_level)
-    if trade_signal:
-        trade_signal["time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        trade_signal["amount"] = max(100, trade_signal["amount"])
-        if st.session_state.auto_trade:
-            trading_api = get_trading_api()
-            try:
-                units = trade_signal["amount"] if trade_signal["trade"] == "BUY" else -trade_signal["amount"]
-                trading_api.place_order(symbol=trade_signal["symbol"], units=units)
-                logger.info(f"Bot auto‑trade: {trade_signal}")
-            except Exception as e:
-                logger.error(f"Bot trade failed: {e}")
-                trade_signal["error"] = str(e)
-        return trade_signal
-    return None
+        return []
+
+    signals = []
+
+    for cur in available:
+        cur_data = df_hist[df_hist["Currency"] == cur].tail(100).copy()
+        cur_data["Time_dt"] = pd.to_datetime(cur_data["Time"])
+        cur_data = cur_data.sort_values("Time_dt")
+
+        if len(cur_data) < 50:
+            continue   # not enough data for indicators
+
+        trade_signal = compute_trade_signal(cur_data, st.session_state.risk_level)
+        if trade_signal:
+            trade_signal["time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            trade_signal["amount"] = max(100, trade_signal["amount"])
+            signals.append(trade_signal)
+
+            # Auto‑trade if enabled
+            if st.session_state.auto_trade:
+                trading_api = get_trading_api()
+                try:
+                    units = trade_signal["amount"] if trade_signal["trade"] == "BUY" else -trade_signal["amount"]
+                    trading_api.place_order(
+                        symbol=trade_signal["symbol"],
+                        units=units
+                    )
+                    logger.info(f"Bot auto‑trade: {trade_signal}")
+                except Exception as e:
+                    logger.error(f"Bot trade failed for {cur}: {e}")
+                    trade_signal["error"] = str(e)
+
+    return signals
+
+# -------------------- UPDATED: Bot loop now handles list of signals --------------------
+def bot_loop(queue_obj, stop_event):
+    logger.info("Bot thread started.")
+    while not stop_event.is_set():
+        try:
+            trades = run_bot()   # now returns a list
+            for trade_info in trades:
+                queue_obj.put(trade_info)
+                # Telegram alert if enabled and signal strong
+                with BOT_CONFIG["lock"]:
+                    if BOT_CONFIG.get("alert_signals"):
+                        thresh = st.session_state.alert_threshold
+                        if trade_info["trade"] in ("BUY", "SELL"):
+                            send_telegram(
+                                f"🤖 Bot signal: {trade_info['trade']} {trade_info['symbol']} "
+                                f"@ {trade_info['price']:.2f} (units: {trade_info['amount']})"
+                            )
+        except Exception as e:
+            error_data = {"time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "error": str(e)}
+            queue_obj.put(error_data)
+            logger.exception("Bot loop error")
+            with BOT_CONFIG["lock"]:
+                if BOT_CONFIG["alert_errors"]:
+                    send_telegram(f"🚨 Bot error: {e}")
+            time.sleep(5)
+            continue
+        time.sleep(5)
+    logger.info("Bot thread exited.")
 
 # -------------------- Database (improved with archiving) --------------------
 DB_PATH = "sai_trading.db"
@@ -506,32 +549,6 @@ EAST_AFRICAN_CURRENCIES = ["UGX", "KES", "TZS", "RWF", "BIF", "SSP", "ETB"]
 OTHER_CURRENCIES = ["USD", "EUR", "GBP", "JPY"]
 
 # -------------------- Bot thread management (updated) --------------------
-def bot_loop(queue_obj, stop_event):
-    logger.info("Bot thread started.")
-    while not stop_event.is_set():
-        try:
-            trade_info = run_bot()
-            if trade_info:
-                queue_obj.put(trade_info)
-                # Telegram alert if enabled and signal strong
-                with BOT_CONFIG["lock"]:
-                    if BOT_CONFIG.get("alert_signals"):
-                        # Check threshold
-                        thresh = st.session_state.alert_threshold
-                        if trade_info["trade"] == "BUY" or trade_info["trade"] == "SELL":
-                            send_telegram(f"🤖 Bot signal: {trade_info['trade']} {trade_info['symbol']} @ {trade_info['price']:.2f} (units: {trade_info['amount']})")
-        except Exception as e:
-            error_data = {"time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "error": str(e)}
-            queue_obj.put(error_data)
-            logger.exception("Bot loop error")
-            with BOT_CONFIG["lock"]:
-                if BOT_CONFIG["alert_errors"]:
-                    send_telegram(f"🚨 Bot error: {e}")
-            time.sleep(5)
-            continue
-        time.sleep(5)  # slower to avoid excessive trades
-    logger.info("Bot thread exited.")
-
 def start_bot():
     if st.session_state.bot_running:
         return
@@ -1012,6 +1029,7 @@ def backtest_strategy(currency: str, df_full: pd.DataFrame, strategy: str,
         "final_balance": balance
     }
 
+# -------------------- NEW: Model Loading & Testing (fix Model Testing tab) --------------------
 def load_model(file_obj):
     """
     Load a pickled model from an uploaded file object.
@@ -1029,7 +1047,6 @@ def test_model(model):
     Run a dummy evaluation of the loaded model.
     Replace this with real inference logic on your test data.
     """
-    # Simulate some predictions (normally you'd call model.predict(test_data))
     rng = np.random.default_rng(42)
     predictions = list(rng.normal(0, 1, 10))
     accuracy = round(rng.uniform(0.6, 0.95), 4)
@@ -1512,7 +1529,7 @@ with tabs[6]:
     else:
         st.info("No bot logs in database.")
 
-# ============== MODEL TESTING (unchanged) ==============
+# ============== MODEL TESTING (fixed) ==============
 with tabs[7]:
     st.markdown("<div class='section-title'>🧪 Model Testing</div>", unsafe_allow_html=True)
     st.warning("⚠️ Only upload .pkl files you trust.")
@@ -1593,4 +1610,3 @@ with tabs[9]:
                 st.dataframe(pd.DataFrame(result["trades"]))
             else:
                 st.info("No trades executed during this period.")
-

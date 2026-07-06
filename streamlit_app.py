@@ -1,13 +1,3 @@
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        RotatingFileHandler("sai_app.log", maxBytes=5*1024*1024, backupCount=2),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
-
 # =========================================================
 # SAI Forex Bot – Enhanced Edition (All 7 Improvements)
 # =========================================================

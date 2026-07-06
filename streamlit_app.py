@@ -1,5 +1,5 @@
 # =========================================================
-# SAI Forex Bot – Enhanced Edition (All 7 Improvements)
+# SAI Forex Bot – Enhanced Edition (All Improvements + Attractive UI)
 # =========================================================
 import streamlit as st
 import threading
@@ -67,45 +67,179 @@ BOT_CONFIG = {
     "lock": threading.Lock()
 }
 
-# -------------------- Custom CSS --------------------
+# -------------------- Custom CSS (Enhanced & Attractive) --------------------
 st.markdown("""
 <style>
-    .main { background-color: #0E1117; }
-    .stApp { background-color: #0E1117; }
-    div[data-testid="stMetricValue"] { font-size: 1.8rem; font-weight: 700; color: #FFFFFF; }
-    div[data-testid="stMetricLabel"] { font-size: 0.9rem; color: #AAAAAA; }
+    /* Main background and app container */
+    .main {
+        background: linear-gradient(135deg, #0a0a1a 0%, #111122 100%);
+    }
+    .stApp {
+        background: transparent;
+    }
+
+    /* Metric numbers */
+    div[data-testid="stMetricValue"] {
+        font-size: 2rem;
+        font-weight: 700;
+        background: linear-gradient(90deg, #00F2FE, #4FACFE);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    div[data-testid="stMetricLabel"] {
+        font-size: 0.9rem;
+        color: #BBBBBB;
+        letter-spacing: 0.5px;
+    }
+
+    /* Glassmorphism cards for currency rates */
     .forex-card {
-        background: linear-gradient(135deg, #1E1E2F 0%, #252540 100%);
-        border-radius: 16px; padding: 20px; margin: 8px 0;
-        border: 1px solid rgba(255,255,255,0.1);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.4); transition: all 0.3s ease;
+        background: rgba(20, 20, 45, 0.6);
+        backdrop-filter: blur(12px);
+        border-radius: 20px;
+        padding: 20px;
+        margin: 8px 0;
+        border: 1px solid rgba(255,255,255,0.15);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        transition: all 0.3s ease;
     }
     .forex-card:hover {
-        border-color: #00F2FE; box-shadow: 0 4px 20px rgba(0,242,254,0.3);
+        border-color: #00F2FE;
+        box-shadow: 0 8px 32px rgba(0,242,254,0.3);
+        transform: translateY(-2px);
     }
-    .currency-pair { font-size: 1.3rem; font-weight: 600; color: #E0E0E0; margin-bottom: 8px; }
-    .rate-value { font-size: 2rem; font-weight: 700; color: #FFFFFF; }
-    .change-positive { color: #00C853; font-weight: 600; }
-    .change-negative { color: #FF1744; font-weight: 600; }
+    .currency-pair {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: #E0E0E0;
+        margin-bottom: 10px;
+    }
+    .rate-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #FFFFFF;
+        text-shadow: 0 0 10px rgba(0,242,254,0.5);
+    }
+    .change-positive {
+        color: #00C853;
+        font-weight: 600;
+    }
+    .change-negative {
+        color: #FF1744;
+        font-weight: 600;
+    }
+
+    /* Section titles */
     .section-title {
-        font-size: 1.5rem; font-weight: 700; color: #FFFFFF;
-        margin: 20px 0 10px 0; border-bottom: 2px solid #00F2FE;
-        padding-bottom: 5px; display: inline-block;
+        font-size: 1.6rem;
+        font-weight: 700;
+        background: linear-gradient(90deg, #00F2FE, #4FACFE);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin: 20px 0 10px 0;
+        border-bottom: 2px solid rgba(0,242,254,0.3);
+        padding-bottom: 5px;
+        display: inline-block;
+        letter-spacing: 0.5px;
     }
+
+    /* Buttons – gradient with glow */
     .stButton > button {
         background: linear-gradient(90deg, #00F2FE 0%, #4FACFE 100%);
-        color: black; font-weight: 600; border: none;
-        border-radius: 8px; padding: 10px 20px; transition: 0.3s;
+        color: #0a0a1a;
+        font-weight: 700;
+        border: none;
+        border-radius: 12px;
+        padding: 12px 24px;
+        font-size: 1rem;
+        letter-spacing: 0.5px;
+        box-shadow: 0 4px 15px rgba(0,242,254,0.4);
+        transition: all 0.3s ease;
     }
     .stButton > button:hover {
-        transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,242,254,0.5);
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(0,242,254,0.7);
     }
+
+    /* Sidebar styling */
+    [data-testid="stSidebar"] {
+        background: rgba(10, 10, 26, 0.95);
+        backdrop-filter: blur(10px);
+    }
+
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+        background: rgba(20,20,45,0.4);
+        border-radius: 12px;
+        padding: 5px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px;
+        padding: 8px 16px;
+        color: #CCCCCC;
+        font-weight: 500;
+    }
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(90deg, #00F2FE, #4FACFE) !important;
+        color: black !important;
+    }
+
+    /* Expander */
+    .streamlit-expanderHeader {
+        background: rgba(20,20,45,0.6);
+        border-radius: 12px;
+        color: #00F2FE;
+        font-weight: 600;
+    }
+
+    /* Dataframe */
+    .stDataFrame {
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+        width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+        background: #0a0a1a;
+    }
+    ::-webkit-scrollbar-thumb {
+        background: #00F2FE;
+        border-radius: 3px;
+    }
+
+    /* Pulse animation for LIVE indicator */
+    @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(0,200,83,0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(0,200,83,0); }
+        100% { box-shadow: 0 0 0 0 rgba(0,200,83,0); }
+    }
+
+    /* Mobile adjustments */
     @media (max-width: 768px) {
-        .forex-card { padding: 12px; margin: 4px 0; }
-        .rate-value { font-size: 1.5rem; }
-        .currency-pair { font-size: 1rem; }
-        .section-title { font-size: 1.2rem; }
-        .stButton > button { padding: 8px 16px; font-size: 0.9rem; }
+        .forex-card {
+            padding: 12px;
+            margin: 4px 0;
+        }
+        .rate-value {
+            font-size: 1.8rem;
+        }
+        .currency-pair {
+            font-size: 1rem;
+        }
+        .section-title {
+            font-size: 1.3rem;
+        }
+        .stButton > button {
+            padding: 10px 20px;
+            font-size: 0.9rem;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -1081,16 +1215,95 @@ with st.sidebar:
     if st.button("🔄 Force Refresh Now"):
         st.rerun()
 
-# Main header
+# Main header with logo
 col_title, col_status = st.columns([3,1])
 with col_title:
-    st.markdown("<h1 style='color:#00F2FE;'>📈 SAI Forex Trading Bot – Enhanced</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#AAAAAA; font-size:1.1rem;'>East African Currency Trading & Forecasting</p>", unsafe_allow_html=True)
+    st.markdown("""
+    <div style="display: flex; align-items: center; gap: 20px;">
+        <svg width="70" height="70" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#00F2FE"/>
+                    <stop offset="100%" stop-color="#4FACFE"/>
+                </linearGradient>
+                <filter id="glow">
+                    <feGaussianBlur stdDeviation="3" result="blur"/>
+                    <feMerge>
+                        <feMergeNode in="blur"/>
+                        <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                </filter>
+            </defs>
+            <circle cx="50" cy="50" r="45" stroke="url(#logoGrad)" stroke-width="4" fill="none" filter="url(#glow)"/>
+            <path d="M30 70 L50 30 L70 70 L50 55 L30 70Z" fill="url(#logoGrad)" filter="url(#glow)"/>
+            <circle cx="50" cy="30" r="6" fill="#00F2FE" filter="url(#glow)"/>
+        </svg>
+        <div>
+            <h1 style="color:#00F2FE; margin: 0; font-size: 2.2rem; font-weight: 700; letter-spacing: 1px;">
+                SAI Forex Bot
+            </h1>
+            <p style="color:#AAAAAA; margin: 5px 0 0 0; font-size: 1.1rem;">
+                East African Currency Trading & Forecasting
+            </p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
 with col_status:
     if st.session_state.live_rates_data.get("rates"):
-        st.success("🔴 LIVE")
+        st.markdown("""
+        <div style="display:flex; align-items:center; gap:8px; background:rgba(0,200,83,0.1); padding:10px 20px; border-radius:30px;">
+            <span style="height:12px; width:12px; background:#00C853; border-radius:50%; display:inline-block; animation:pulse 1.5s infinite;"></span>
+            <span style="color:#00C853; font-weight:600;">LIVE</span>
+        </div>
+        """, unsafe_allow_html=True)
     else:
-        st.warning("🟡 SIMULATED")
+        st.markdown("""
+        <div style="display:flex; align-items:center; gap:8px; background:rgba(255,214,0,0.1); padding:10px 20px; border-radius:30px;">
+            <span style="height:12px; width:12px; background:#FFD600; border-radius:50%;"></span>
+            <span style="color:#FFD600; font-weight:600;">SIMULATED</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+# Animated particle background (optional aesthetic)
+st.markdown("""
+<canvas id="particleCanvas" style="position:fixed; top:0; left:0; width:100%; height:100%; z-index:-1; pointer-events:none;"></canvas>
+<script>
+const canvas = document.getElementById("particleCanvas");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+const particles = [];
+for (let i = 0; i < 50; i++) {
+    particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        r: Math.random() * 2 + 1,
+        dx: (Math.random() - 0.5) * 0.5,
+        dy: (Math.random() - 0.5) * 0.5
+    });
+}
+function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (let p of particles) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+        ctx.fillStyle = "rgba(0,242,254,0.2)";
+        ctx.fill();
+        p.x += p.dx;
+        p.y += p.dy;
+        if (p.x < 0 || p.x > canvas.width) p.dx *= -1;
+        if (p.y < 0 || p.y > canvas.height) p.dy *= -1;
+    }
+    requestAnimationFrame(animate);
+}
+animate();
+window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+});
+</script>
+""", unsafe_allow_html=True)
 
 tabs = st.tabs([
     "📊 Dashboard", "📅 Forecast", "📈 Trade Recommendations", "💹 Live Trading",
@@ -1100,6 +1313,37 @@ tabs = st.tabs([
 
 # ============== DASHBOARD ==============
 with tabs[0]:
+    # Summary cards
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown("""
+        <div style="background:rgba(0,242,254,0.1); border-radius:16px; padding:16px; text-align:center;">
+            <p style="color:#00F2FE; margin:0;">📊 Models Active</p>
+            <h2 style="margin:0; color:white;">2</h2>
+        </div>
+        """, unsafe_allow_html=True)
+    with col2:
+        st.markdown("""
+        <div style="background:rgba(0,200,83,0.1); border-radius:16px; padding:16px; text-align:center;">
+            <p style="color:#00C853; margin:0;">🤖 Bot Status</p>
+            <h2 style="margin:0; color:white;">""" + ("Running" if st.session_state.bot_running else "Stopped") + """</h2>
+        </div>
+        """, unsafe_allow_html=True)
+    with col3:
+        st.markdown("""
+        <div style="background:rgba(255,214,0,0.1); border-radius:16px; padding:16px; text-align:center;">
+            <p style="color:#FFD600; margin:0;">📈 Signals Today</p>
+            <h2 style="margin:0; color:white;">""" + str(len(st.session_state.logs)) + """</h2>
+        </div>
+        """, unsafe_allow_html=True)
+    with col4:
+        st.markdown("""
+        <div style="background:rgba(255,23,68,0.1); border-radius:16px; padding:16px; text-align:center;">
+            <p style="color:#FF1744; margin:0;">⚠️ Risk Level</p>
+            <h2 style="margin:0; color:white;">""" + str(st.session_state.risk_level) + """/10</h2>
+        </div>
+        """, unsafe_allow_html=True)
+
     st.markdown("<div class='section-title'>🌍 East African Forex Rates (USD Base)</div>", unsafe_allow_html=True)
     rates, deltas = get_current_rates()
     update_history(rates)
@@ -1136,7 +1380,7 @@ with tabs[0]:
 
     st.caption(f"Last updated: {datetime.now().strftime('%H:%M:%S')} | Live rates refresh every 2s")
 
-    # Market Overview (unchanged)
+    # Market Overview
     st.markdown("<div class='section-title'>📊 Market Overview</div>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns(3)
     sorted_deltas = sorted(((k,v) for k,v in deltas.items() if v is not None), key=lambda x: x[1])
@@ -1239,7 +1483,6 @@ with tabs[0]:
 # ============== UNIFIED FORECAST TAB ==============
 with tabs[1]:
     st.markdown("<div class='section-title'>📅 Multi‑Horizon Forecast</div>", unsafe_allow_html=True)
-    # Horizon selector
     horizon_dict = {"Daily": 1, "Weekly": 7, "Monthly": 30}
     selected_horizon = st.radio("Horizon", list(horizon_dict.keys()), horizontal=True, key="forecast_horizon")
     steps = horizon_dict[selected_horizon]
@@ -1249,7 +1492,6 @@ with tabs[1]:
     else:
         selected_timeframes = [selected_horizon]
 
-    # Generate forecasts for all East African currencies for selected timeframes
     forecasts = {}
     for cur in EAST_AFRICAN_CURRENCIES:
         cur_rate = st.session_state.rates.get(cur, None)
@@ -1263,7 +1505,6 @@ with tabs[1]:
                                   use_auto_arima=st.session_state.use_auto_arima)
             forecasts[(cur, tf)] = result
 
-    # Build summary table
     if forecasts:
         rows = []
         for (cur, tf), res in forecasts.items():
@@ -1277,16 +1518,21 @@ with tabs[1]:
                 "Prophet Signal": res["prophet_signal"]
             })
         df_forecast = pd.DataFrame(rows)
-        st.dataframe(df_forecast.style.map(lambda val: 'background-color: #00C853; color:black' if val=='BUY' else ('background-color: #FF1744; color:white' if val=='SELL' else ''), subset=['ARIMA Signal','Prophet Signal']), use_container_width=True)
+        st.markdown("""
+        <div style="background: rgba(20,20,45,0.6); border-radius: 16px; padding: 16px; margin: 10px 0; border: 1px solid rgba(255,255,255,0.1);">
+        """, unsafe_allow_html=True)
+        st.dataframe(df_forecast.style.map(
+            lambda val: 'background-color: #00C853; color:black' if val=='BUY' else ('background-color: #FF1744; color:white' if val=='SELL' else ''),
+            subset=['ARIMA Signal','Prophet Signal']
+        ), use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
     else:
         st.info("No forecast data available.")
 
-    # Detailed chart for selected currency
     st.markdown("### Detailed Forecast Chart")
     selected_currency = st.selectbox("Pick a currency for detailed view", EAST_AFRICAN_CURRENCIES, key="forecast_detail")
     cur_rate = st.session_state.rates.get(selected_currency, None)
     if cur_rate is not None:
-        # Always show daily for detail
         result = run_forecast(selected_currency, "daily", 1,
                               history_df=st.session_state.history,
                               current_rate=cur_rate,
@@ -1295,7 +1541,6 @@ with tabs[1]:
             fig = go.Figure()
             train = result["train"]
             fig.add_trace(go.Scatter(x=train["Time_dt"], y=train["Rate"], mode='lines', name='History'))
-            # ARIMA forecast with CI
             if result["arima_all_preds"]:
                 pred_dates = [train["Time_dt"].iloc[-1] + timedelta(days=i+1) for i in range(len(result["arima_all_preds"]))]
                 fig.add_trace(go.Scatter(x=pred_dates, y=result["arima_all_preds"], mode='lines+markers', name='ARIMA'))
@@ -1305,7 +1550,6 @@ with tabs[1]:
                     upper = ci[:, 1]
                     fig.add_trace(go.Scatter(x=pred_dates, y=upper, mode='lines', line=dict(width=0), showlegend=False))
                     fig.add_trace(go.Scatter(x=pred_dates, y=lower, mode='lines', fill='tonexty', fillcolor='rgba(0,242,254,0.2)', line=dict(width=0), name='ARIMA CI'))
-            # Prophet with intervals
             if result.get("prophet_full") is not None:
                 fc = result["prophet_full"]
                 future_part = fc[fc["ds"] > train["Time_dt"].iloc[-1]]
@@ -1338,7 +1582,6 @@ with tabs[2]:
                                       current_rate=cur_rate,
                                       use_auto_arima=st.session_state.use_auto_arima)
                 if result.get("warning"): fallback_used = True
-                # Apply threshold
                 arima_sig = result["arima_signal"]
                 prophet_sig = result["prophet_signal"]
                 thresh = st.session_state.alert_threshold
@@ -1360,9 +1603,15 @@ with tabs[2]:
         if signals:
             if fallback_used: st.warning("Some forecasts used rough estimates due to insufficient data.")
             df_signals = pd.DataFrame(signals)
-            st.dataframe(df_signals.style.map(lambda val: 'background-color: #00C853; color:black' if val=='BUY' else ('background-color: #FF1744; color:white' if val=='SELL' else ''), subset=['ARIMA Signal','Prophet Signal']), use_container_width=True)
+            st.markdown("""
+            <div style="background: rgba(20,20,45,0.6); border-radius: 16px; padding: 16px; margin: 10px 0; border: 1px solid rgba(255,255,255,0.1);">
+            """, unsafe_allow_html=True)
+            st.dataframe(df_signals.style.map(
+                lambda val: 'background-color: #00C853; color:black' if val=='BUY' else ('background-color: #FF1744; color:white' if val=='SELL' else ''),
+                subset=['ARIMA Signal','Prophet Signal']
+            ), use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
             if st.session_state.alert_signals:
-                # Send telegram only for strong signals
                 for row in signals:
                     if row["ARIMA Signal"] != "HOLD" or row["Prophet Signal"] != "HOLD":
                         send_telegram(f"📈 {row['Currency']} signal: ARIMA {row['ARIMA Signal']}, Prophet {row['Prophet Signal']} (threshold > {st.session_state.alert_threshold*100:.1f}%)")
@@ -1459,7 +1708,7 @@ with tabs[3]:
     if st.button("Run Auto‑Trade Now"):
         st.info("Auto‑trade logic runs on bot signals. Enable bot and auto‑trade above.")
 
-# ============== TECHNICAL ANALYSIS (unchanged) ==============
+# ============== TECHNICAL ANALYSIS ==============
 with tabs[4]:
     st.markdown("<div class='section-title'>📉 Technical Analysis</div>", unsafe_allow_html=True)
     ta_currency = st.selectbox("Currency", EAST_AFRICAN_CURRENCIES, key="ta_cur")

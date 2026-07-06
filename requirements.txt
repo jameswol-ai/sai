@@ -3,6 +3,10 @@ streamlit>=1.32
 pandas>=2.2
 numpy>=1.26
 
+pip install streamlit pandas numpy matplotlib plotly statsmodels prophet pmdarima newsapi-python textblob streamlit-autorefresh scipy requests
+
+streamlit run streamlit_app.py
+
 # Plotting
 matplotlib>=3.8
 seaborn>=0.13

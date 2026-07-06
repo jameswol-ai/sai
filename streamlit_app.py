@@ -103,11 +103,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 if not PLOTLY_AVAILABLE:
-    st.info("📊 Install plotly for interactive charts: `pip install plotly`")
+    logger.warning("Plotly not installed – interactive charts will be unavailable.")
 if not SENTIMENT_AVAILABLE:
-    st.info("📰 Install newsapi-python & textblob for sentiment: `pip install newsapi-python textblob`")
+    logger.warning("newsapi/textblob not installed – news sentiment will be unavailable.")
 if not AUTOREFRESH_AVAILABLE:
-    st.info("⏱️ Install streamlit-autorefresh for smooth auto‑refresh: `pip install streamlit-autorefresh`")
+    logger.warning("streamlit-autorefresh not installed – auto‑refresh will be unavailable.")
 
 # -------------------- ARIMA (Real Implementation) --------------------
 def fit_arima(series: pd.Series, order: Tuple[int, int, int] = (2,1,2)) -> Dict[str, Any]:

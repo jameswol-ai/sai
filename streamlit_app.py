@@ -23,16 +23,6 @@ from typing import Dict, List, Optional, Any, Tuple
 import logging
 from logging.handlers import RotatingFileHandler
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        RotatingFileHandler("sai_app.log", maxBytes=5*1024*1024, backupCount=2),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
-
 # -------------------- Optional Plotly --------------------
 try:
     import plotly.graph_objects as go
@@ -1572,10 +1562,3 @@ with tabs[9]:
             else:
                 st.info("No trades executed during this period.")
 
-# Optional dependencies – hide warnings unless debugging
-if not PLOTLY_AVAILABLE:
-    logger.warning("Plotly not installed – interactive charts disabled.")
-if not SENTIMENT_AVAILABLE:
-    logger.warning("newsapi/textblob not installed – news sentiment disabled.")
-if not AUTOREFRESH_AVAILABLE:
-    logger.warning("streamlit-autorefresh not installed – auto‑refresh disabled.")

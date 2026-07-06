@@ -2,10 +2,6 @@ import streamlit as st
 import threading, time, queue, pandas as pd, numpy as np, matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from collections import deque
-
-
-
-
 from config import logger, defaults, BOT_CONFIG, EAST_AFRICAN_CURRENCIES, CUSTOM_CSS
 from data.live_feed import start_live_stream, get_current_rates, update_history
 from data.database import (init_db, load_account, load_history, load_bot_logs, load_positions, load_orders,

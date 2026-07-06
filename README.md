@@ -247,3 +247,26 @@ curl -X POST http://localhost:8000/predict \
   "signal": "SELL"
 }
 ```
+
+sai/
+├── streamlit_app.py
+├── config.py
+├── data/
+│   ├── live_feed.py
+│   └── database.py
+├── models/
+│   ├── arima_model.py
+│   ├── prophet_model.py
+│   └── backtest.py
+├── trading/
+│   ├── signals.py
+│   ├── bot.py
+│   └── api.py
+├── utils/
+│   ├── indicators.py
+│   ├── sentiment.py
+│   ├── telegram.py
+│   ├── risk.py
+│   └── sound.py
+├── requirements.txt
+└── alert.mp3 (optional sound file)

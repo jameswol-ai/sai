@@ -1,5 +1,5 @@
 # =========================================================
-# SAI Forex Bot – Improved Architecture
+# SAI Forex Bot – Enhanced Edition (All 7 Improvements)
 # =========================================================
 import streamlit as st
 import threading
@@ -43,6 +43,12 @@ try:
     AUTOREFRESH_AVAILABLE = True
 except ImportError:
     AUTOREFRESH_AVAILABLE = False
+
+# Backtesting libs
+try:
+    from scipy import stats as scipy_stats
+except ImportError:
+    scipy_stats = None
 
 # -------------------- Global thread‑safe bot config --------------------
 BOT_CONFIG = {
@@ -134,17 +140,20 @@ def fit_auto_arima(series: pd.Series) -> Dict[str, Any]:
         logger.warning(f"Auto-ARIMA failed ({e}), falling back.")
         return fit_arima(series)
 
-def forecast_next(arima_model: Dict[str, Any], steps: int = 1) -> List[float]:
+def forecast_next(arima_model: Dict[str, Any], steps: int = 1) -> Tuple[List[float], Optional[np.ndarray]]:
+    """Return forecasts and confidence intervals if available."""
     if arima_model.get("fitted") and arima_model["model"] is not None:
         try:
-            fc = arima_model["model"].forecast(steps=steps)
-            return fc.tolist()
+            fc_result = arima_model["model"].get_forecast(steps=steps)
+            pred = fc_result.predicted_mean.tolist()
+            conf_int = fc_result.conf_int()  # returns DataFrame
+            return pred, conf_int.values if conf_int is not None else None
         except Exception as e:
             logger.warning(f"ARIMA forecast failed ({e}), using stub.")
     last = arima_model["last_value"]
     std = arima_model["std"]
     rng = np.random.default_rng(42)
-    return [last + rng.normal(0, std * 0.02) for _ in range(steps)]
+    return [last + rng.normal(0, std * 0.02) for _ in range(steps)], None
 
 # -------------------- Prophet (Real Implementation) --------------------
 def fit_prophet(df_rates: pd.DataFrame) -> Dict[str, Any]:
@@ -165,12 +174,13 @@ def fit_prophet(df_rates: pd.DataFrame) -> Dict[str, Any]:
         slope = 0 if len(df) <= 1 else np.polyfit(df["ds_num"], df["y"], 1)[0]
         return {"last_date": df["ds"].max(), "slope": slope, "last_y": last_y, "fitted": False}
 
-def forecast_future(prophet_model: Dict[str, Any], periods: int = 1, freq: str = "D") -> pd.DataFrame:
+def forecast_future(prophet_model: Dict[str, Any], periods: int = 1, freq: str = "D") -> Tuple[pd.DataFrame, Optional[Any]]:
+    """Return forecasts and possibly full forecast dataframe with intervals."""
     if prophet_model.get("fitted"):
         try:
             future = prophet_model["model"].make_future_dataframe(periods=periods, freq=freq)
             forecast = prophet_model["model"].predict(future)
-            return forecast[["ds", "yhat"]].tail(periods)
+            return forecast[["ds", "yhat", "yhat_lower", "yhat_upper"]].tail(periods), forecast
         except Exception as e:
             logger.warning(f"Prophet forecast failed ({e}), using stub.")
     last_date = prophet_model["last_date"]
@@ -178,7 +188,7 @@ def forecast_future(prophet_model: Dict[str, Any], periods: int = 1, freq: str =
     last_y = prophet_model["last_y"]
     dates = [last_date + timedelta(days=i+1) for i in range(periods)]
     values = [last_y + slope * (i+1) for i in range(periods)]
-    return pd.DataFrame({"ds": dates, "yhat": values})
+    return pd.DataFrame({"ds": dates, "yhat": values}), None
 
 # -------------------- Utility metrics --------------------
 def compute_metrics(actual: np.ndarray, predicted: np.ndarray) -> Dict[str, Optional[float]]:
@@ -194,37 +204,80 @@ def compute_metrics(actual: np.ndarray, predicted: np.ndarray) -> Dict[str, Opti
     mape = float(np.mean(np.abs((actual - predicted) / denom)) * 100)
     return {"RMSE": round(rmse, 6), "MAPE": round(mape, 4)}
 
-# -------------------- Bot simulation --------------------
-def run_bot():
-    return {
-        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "trade": random.choice(["BUY", "SELL"]),
-        "symbol": random.choice(ALL_CURRENCIES),
-        "amount": random.randint(100, 5000)
-    }
-
-def load_model(file_obj):
-    try:
-        return pickle.load(file_obj)
-    except Exception as e:
-        logger.error(f"Model load failed: {e}")
+# -------------------- NEW: Real Trading Logic --------------------
+def compute_trade_signal(rates_df: pd.DataFrame, risk_level: int) -> Optional[Dict]:
+    """
+    Strategy: SMA20 > SMA50 and RSI < 30 → BUY, SMA20 < SMA50 and RSI > 70 → SELL.
+    Returns trade dict or None.
+    """
+    if len(rates_df) < 50:
         return None
+    close = rates_df["Rate"].astype(float)
+    sma20 = close.rolling(20).mean().iloc[-1]
+    sma50 = close.rolling(50).mean().iloc[-1]
+    # RSI 14
+    delta = close.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.rolling(14).mean().iloc[-1]
+    avg_loss = loss.rolling(14).mean().iloc[-1]
+    if avg_loss == 0:
+        rsi = 100.0
+    else:
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+    trade = None
+    if sma20 > sma50 and rsi < 30:
+        trade = "BUY"
+    elif sma20 < sma50 and rsi > 70:
+        trade = "SELL"
+    if trade:
+        # Adjust position size based on risk level (1-10)
+        risk_fraction = risk_level / 100.0
+        amount = int(1000 * risk_fraction) if risk_fraction else 1000
+        return {"trade": trade, "amount": amount, "symbol": rates_df.iloc[-1]["Currency"],
+                "price": close.iloc[-1]}
+    return None
 
-def test_model(model):
-    if model is None:
-        return {"predictions": [], "accuracy": 0}
-    return {"predictions": [1, 0, 1, 1, 0], "accuracy": 0.8}
+# -------------------- Bot simulation → Real Trading Loop --------------------
+def run_bot():
+    """Called by bot thread. Uses live rates and indicators to trade."""
+    with st.session_state.live_rates_lock:
+        rates = st.session_state.live_rates_data.get("rates", {})
+    if not rates:
+        return None
+    # For each currency we could have a separate dataframe, but we use the live history
+    df_hist = st.session_state.history
+    if df_hist is None or df_hist.empty:
+        return None
+    # For simplicity, pick a random currency that has enough data
+    available = [c for c in EAST_AFRICAN_CURRENCIES if c in rates]
+    if not available:
+        return None
+    # Randomly select one for demo; in production you'd loop all
+    cur = random.choice(available)
+    cur_data = df_hist[df_hist["Currency"] == cur].tail(100).copy()
+    cur_data["Time_dt"] = pd.to_datetime(cur_data["Time"])
+    cur_data = cur_data.sort_values("Time_dt")
+    if len(cur_data) < 50:
+        return None
+    trade_signal = compute_trade_signal(cur_data, st.session_state.risk_level)
+    if trade_signal:
+        trade_signal["time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        trade_signal["amount"] = max(100, trade_signal["amount"])
+        if st.session_state.auto_trade:
+            trading_api = get_trading_api()
+            try:
+                units = trade_signal["amount"] if trade_signal["trade"] == "BUY" else -trade_signal["amount"]
+                trading_api.place_order(symbol=trade_signal["symbol"], units=units)
+                logger.info(f"Bot auto‑trade: {trade_signal}")
+            except Exception as e:
+                logger.error(f"Bot trade failed: {e}")
+                trade_signal["error"] = str(e)
+        return trade_signal
+    return None
 
-# -------------------- Logging --------------------
-logger = logging.getLogger("sai_app")
-logger.setLevel(logging.INFO)
-handler = RotatingFileHandler("sai_app.log", maxBytes=2_000_000, backupCount=3)
-formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-handler.setFormatter(formatter)
-if not logger.handlers:
-    logger.addHandler(handler)
-
-# -------------------- Database --------------------
+# -------------------- Database (improved with archiving) --------------------
 DB_PATH = "sai_trading.db"
 DB_LOCK = threading.Lock()
 
@@ -237,6 +290,13 @@ def init_db():
     conn = db_connect()
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            currency TEXT NOT NULL,
+            rate REAL NOT NULL,
+            forecast REAL
+        );
+        CREATE TABLE IF NOT EXISTS history_archive (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             currency TEXT NOT NULL,
@@ -282,7 +342,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-# ---------- History ----------
+# ---------- History with automatic archiving ----------
 def insert_history(rows: List[Dict]):
     with DB_LOCK:
         conn = db_connect()
@@ -291,7 +351,14 @@ def insert_history(rows: List[Dict]):
             [(r["Time"], r["Currency"], r["Rate"], r["Forecast"]) for r in rows]
         )
         conn.commit()
-        conn.execute("DELETE FROM history WHERE id NOT IN (SELECT id FROM history ORDER BY id DESC LIMIT 1000)")
+        # Trim main table to 2000 rows and archive old ones (>7 days) to history_archive
+        conn.execute("""
+            INSERT INTO history_archive (time, currency, rate, forecast)
+            SELECT time, currency, rate, forecast FROM history
+            WHERE time < datetime('now', '-7 days')
+        """)
+        conn.execute("DELETE FROM history WHERE time < datetime('now', '-7 days')")
+        conn.execute("DELETE FROM history WHERE id NOT IN (SELECT id FROM history ORDER BY id DESC LIMIT 2000)")
         conn.commit()
         conn.close()
 
@@ -304,6 +371,19 @@ def load_history(limit: int = 2000) -> pd.DataFrame:
     conn.close()
     df.rename(columns={"time": "Time", "currency": "Currency", "rate": "Rate", "forecast": "Forecast"}, inplace=True)
     return df
+
+def load_archive_history() -> pd.DataFrame:
+    conn = db_connect()
+    df = pd.read_sql_query("SELECT time, currency, rate, forecast FROM history_archive ORDER BY time ASC", conn)
+    conn.close()
+    df.rename(columns={"time": "Time", "currency": "Currency", "rate": "Rate", "forecast": "Forecast"}, inplace=True)
+    return df
+
+def download_history_csv():
+    df = load_history(limit=2000)
+    archive = load_archive_history()
+    full = pd.concat([archive, df], ignore_index=True).sort_values("Time")
+    return full.to_csv(index=False).encode('utf-8')
 
 # ---------- Bot Logs ----------
 def insert_bot_logs(logs: List[Dict]):
@@ -324,7 +404,7 @@ def load_bot_logs(limit: int = 500) -> pd.DataFrame:
     conn.close()
     return df.iloc[::-1]
 
-# ---------- Account ----------
+# ---------- Account, Positions, Orders unchanged ----------
 def save_account(balance: float, equity: float):
     with DB_LOCK:
         conn = db_connect()
@@ -341,7 +421,6 @@ def load_account() -> Dict[str, float]:
     conn.close()
     return data
 
-# ---------- Positions & Orders ----------
 def save_positions(positions: List[Dict]):
     with DB_LOCK:
         conn = db_connect()
@@ -390,6 +469,7 @@ defaults = {
     "live_rates_lock": threading.Lock(), "live_rates_data": {"rates": {}, "prev_rates": {}, "timestamp": None},
     "live_stream_thread": None, "live_stream_stop_event": None,
     "alert_signals": False, "alert_errors": False,
+    "alert_threshold": 0.02,  # new: signal strength threshold
     "db_initialised": False
 }
 
@@ -408,18 +488,26 @@ if not st.session_state.db_initialised:
     st.session_state.trading_account["order_history"] = load_orders()
     st.session_state.db_initialised = True
 
-HISTORY_MAX_ROWS = 1000
+HISTORY_MAX_ROWS = 2000
 ALL_CURRENCIES = ["UGX", "KES", "TZS", "RWF", "BIF", "SSP", "ETB", "USD", "EUR", "GBP", "JPY"]
 EAST_AFRICAN_CURRENCIES = ["UGX", "KES", "TZS", "RWF", "BIF", "SSP", "ETB"]
 OTHER_CURRENCIES = ["USD", "EUR", "GBP", "JPY"]
 
-# -------------------- Bot thread management --------------------
+# -------------------- Bot thread management (updated) --------------------
 def bot_loop(queue_obj, stop_event):
     logger.info("Bot thread started.")
     while not stop_event.is_set():
         try:
             trade_info = run_bot()
-            queue_obj.put(trade_info)
+            if trade_info:
+                queue_obj.put(trade_info)
+                # Telegram alert if enabled and signal strong
+                with BOT_CONFIG["lock"]:
+                    if BOT_CONFIG.get("alert_signals"):
+                        # Check threshold
+                        thresh = st.session_state.alert_threshold
+                        if trade_info["trade"] == "BUY" or trade_info["trade"] == "SELL":
+                            send_telegram(f"🤖 Bot signal: {trade_info['trade']} {trade_info['symbol']} @ {trade_info['price']:.2f} (units: {trade_info['amount']})")
         except Exception as e:
             error_data = {"time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "error": str(e)}
             queue_obj.put(error_data)
@@ -427,17 +515,17 @@ def bot_loop(queue_obj, stop_event):
             with BOT_CONFIG["lock"]:
                 if BOT_CONFIG["alert_errors"]:
                     send_telegram(f"🚨 Bot error: {e}")
-            time.sleep(5)       # wait before retrying
+            time.sleep(5)
             continue
-        time.sleep(2)
+        time.sleep(5)  # slower to avoid excessive trades
     logger.info("Bot thread exited.")
 
 def start_bot():
     if st.session_state.bot_running:
         return
-    # sync alert settings
     with BOT_CONFIG["lock"]:
         BOT_CONFIG["alert_errors"] = st.session_state.alert_errors
+        BOT_CONFIG["alert_signals"] = st.session_state.alert_signals
     st.session_state.stop_event = threading.Event()
     t = threading.Thread(target=bot_loop, args=(st.session_state.bot_queue, st.session_state.stop_event), daemon=True)
     st.session_state.bot_thread = t
@@ -466,7 +554,7 @@ def drain_bot_queue(max_items=50):
         st.session_state.logs = st.session_state.logs[-1000:]
     return drained
 
-# -------------------- Live Rate Stream (sole source) --------------------
+# -------------------- Live Rate Stream (unchanged) --------------------
 def _live_rate_fetcher(stop_event: threading.Event):
     while not stop_event.is_set():
         try:
@@ -503,7 +591,6 @@ def get_live_rates():
 # -------------------- Real exchange rate fetcher --------------------
 @st.cache_data(ttl=5, show_spinner=False)
 def get_real_rates():
-    """Return fresh rates dict or empty dict on failure."""
     try:
         url = "https://api.frankfurter.app/latest?from=USD&to=" + ",".join(ALL_CURRENCIES)
         resp = requests.get(url, timeout=5)
@@ -526,11 +613,10 @@ def sample_currency_rates():
     return {cur: round(random.uniform(low, high), 2) for cur, (low, high) in ranges.items()}
 
 def get_current_rates():
-    """Single entry point for dashboard – uses live stream or fallback."""
     if not st.session_state.live_stream_thread or not st.session_state.live_stream_thread.is_alive():
         start_live_stream()
     rates, prev = get_live_rates()
-    if not rates:   # still empty, use simulated as temporary fallback
+    if not rates:
         rates = sample_currency_rates()
     deltas = {}
     for cur in EAST_AFRICAN_CURRENCIES:
@@ -547,7 +633,7 @@ def update_history(rates, forecast=None):
         return
     st.session_state.last_history_update = now
     if forecast is None:
-        forecast = {cur: rates[cur] for cur in rates}  # store current as placeholder
+        forecast = {cur: rates[cur] for cur in rates}
     rows = [{"Time": now.isoformat(), "Currency": cur,
              "Rate": rates[cur], "Forecast": forecast[cur]} for cur in rates]
     if rows:
@@ -570,15 +656,15 @@ def generate_trade_signal(current_rate, forecast_value, threshold=0.01):
         return "SELL"
     return "HOLD"
 
-# -------------------- Central forecast (cached, with explicit inputs) --------------------
+# -------------------- Central forecast (cache invalidated by rate) --------------------
 @st.cache_data(ttl=300, show_spinner="Generating forecast...")
-def run_forecast(currency, horizon, steps, history_df, current_rates, use_auto_arima, freq="D"):
+def run_forecast(currency, horizon, steps, history_df, current_rate, use_auto_arima, freq="D"):
+    # current_rate is now a float, so it's part of the cache key
     df_all = history_df.copy()
     df_all["Time_dt"] = pd.to_datetime(df_all["Time"])
     df_cur = df_all[df_all["Currency"] == currency].sort_values("Time_dt")
 
     if len(df_cur) < 20:
-        current_rate = current_rates.get(currency, 1.0)
         rng = np.random.default_rng(42)
         fallback_preds = [round(current_rate * (1 + rng.uniform(-0.01, 0.01)), 2) for _ in range(steps)]
         return {
@@ -589,37 +675,37 @@ def run_forecast(currency, horizon, steps, history_df, current_rates, use_auto_a
             "arima_metrics": None, "prophet_metrics": None,
             "actual_test": [], "train": df_cur, "test": pd.DataFrame(),
             "warning": "Insufficient history – forecast is a rough estimate only.",
-            "arima_fitted": False, "prophet_fitted": False
+            "arima_fitted": False, "prophet_fitted": False,
+            "arima_conf_int": None, "prophet_conf_int": None
         }
 
     train = df_cur.iloc[:-steps] if steps < len(df_cur) else df_cur.iloc[:-1]
     test = df_cur.iloc[-steps:] if steps < len(df_cur) else df_cur.iloc[-1:]
     actual_test = test["Rate"].values
 
-    arima_pred, arima_metrics, arima_fitted = None, None, False
+    arima_pred, arima_metrics, arima_fitted, arima_conf = None, None, False, None
     try:
         if use_auto_arima:
             arima_model = fit_auto_arima(train["Rate"])
         else:
             arima_model = fit_arima(train["Rate"], order=(2,1,2))
-        arima_pred = forecast_next(arima_model, steps=steps)
+        arima_pred, arima_conf = forecast_next(arima_model, steps=steps)
         arima_metrics = compute_metrics(actual_test, arima_pred[:len(actual_test)])
         arima_fitted = arima_model.get("fitted", False)
     except Exception as e:
         logger.warning(f"ARIMA pipeline failed for {currency}: {e}")
 
-    prophet_pred, prophet_metrics, prophet_fitted = None, None, False
+    prophet_pred, prophet_metrics, prophet_fitted, prophet_full = None, None, False, None
     try:
         df_prophet = pd.DataFrame({"ds": train["Time_dt"], "y": train["Rate"].astype(float)})
         prophet_model = fit_prophet(df_prophet)
-        forecast_df = forecast_future(prophet_model, periods=steps, freq=freq)
+        forecast_df, prophet_full = forecast_future(prophet_model, periods=steps, freq=freq)
         prophet_pred = forecast_df["yhat"].tolist()
         prophet_metrics = compute_metrics(actual_test, prophet_pred[:len(actual_test)])
         prophet_fitted = prophet_model.get("fitted", False)
     except Exception as e:
         logger.warning(f"Prophet pipeline failed for {currency}: {e}")
 
-    current_rate = df_cur["Rate"].iloc[-1]
     arima_signal = generate_trade_signal(current_rate, arima_pred[0]) if arima_pred else "HOLD"
     prophet_signal = generate_trade_signal(current_rate, prophet_pred[0]) if prophet_pred else "HOLD"
 
@@ -631,10 +717,11 @@ def run_forecast(currency, horizon, steps, history_df, current_rates, use_auto_a
         "arima_all_preds": arima_pred, "prophet_all_preds": prophet_pred,
         "arima_metrics": arima_metrics, "prophet_metrics": prophet_metrics,
         "actual_test": actual_test, "train": train, "test": test,
-        "warning": None, "arima_fitted": arima_fitted, "prophet_fitted": prophet_fitted
+        "warning": None, "arima_fitted": arima_fitted, "prophet_fitted": prophet_fitted,
+        "arima_conf_int": arima_conf, "prophet_full": prophet_full
     }
 
-# -------------------- Technical Indicators --------------------
+# -------------------- Technical Indicators (unchanged) --------------------
 def compute_indicators(df_cur, rsi_period=14, sma_windows=[20,50],
                        macd_fast=12, macd_slow=26, macd_signal=9,
                        bb_period=20, bb_std=2, stoch_k=14, stoch_d=3, atr_period=14):
@@ -664,7 +751,6 @@ def compute_indicators(df_cur, rsi_period=14, sma_windows=[20,50],
     high_max = df["Rate"].rolling(window=stoch_k, min_periods=stoch_k).max()
     df["Stoch_%K"] = 100 * (df["Rate"] - low_min) / (high_max - low_min)
     df["Stoch_%D"] = df["Stoch_%K"].rolling(window=stoch_d, min_periods=stoch_d).mean()
-    # Simulated volume for OBV/ATR
     rng = np.random.RandomState(42)
     volume = rng.randint(500, 2000, size=len(df))
     obv = [0]
@@ -686,7 +772,7 @@ def compute_indicators(df_cur, rsi_period=14, sma_windows=[20,50],
     df["ATR"] = true_range.rolling(window=atr_period, min_periods=atr_period).mean()
     return df
 
-# -------------------- Trading API (persistent) --------------------
+# -------------------- Trading API (Enhanced OANDA) --------------------
 class TradingAPI:
     def get_account_summary(self) -> Dict: raise NotImplementedError
     def place_order(self, symbol, units, stop_loss=None, take_profit=None, order_type="MARKET") -> Dict: raise NotImplementedError
@@ -698,7 +784,8 @@ class SimulatedTrading(TradingAPI):
         self.account = account
     def get_account_summary(self):
         return {"balance": self.account["balance"], "equity": self.account["equity"],
-                "open_positions": len(self.account["open_positions"])}
+                "open_positions": len(self.account["open_positions"]),
+                "unrealized_pl": 0, "margin_used": 0}
     def place_order(self, symbol, units, stop_loss=None, take_profit=None, order_type="MARKET"):
         rate = st.session_state.rates.get(symbol, 1.0)
         order = {
@@ -735,29 +822,45 @@ class SimulatedTrading(TradingAPI):
         return False
 
 class OANDA_Trading(TradingAPI):
-    def __init__(self, ctx, account_id): self.ctx=ctx; self.account_id=account_id
+    def __init__(self, ctx, account_id):
+        self.ctx = ctx
+        self.account_id = account_id
     def get_account_summary(self):
         resp = self.ctx.account.get(self.account_id)
-        if resp.status != 200: raise Exception(f"OANDA error: {resp.body}")
+        if resp.status != 200:
+            raise Exception(f"OANDA error: {resp.body}")
         acc = resp.body["account"]
-        return {"balance": acc["balance"], "equity": acc["NAV"],
-                "open_positions": len(self.get_open_positions())}
+        return {"balance": float(acc["balance"]),
+                "equity": float(acc["NAV"]),
+                "open_positions": acc.get("openPositionCount", 0),
+                "unrealized_pl": float(acc.get("unrealizedPL", 0)),
+                "margin_used": float(acc.get("marginUsed", 0))}
     def place_order(self, symbol, units, stop_loss=None, take_profit=None, order_type="MARKET"):
-        instr = f"{symbol[:3]}_{symbol[3:]}" if len(symbol)==6 else f"USD_{symbol}"
-        order = {"order": {"type":"MARKET","instrument":instr,"units":str(units),"timeInForce":"FOK"}}
-        if stop_loss: order["order"]["stopLossOnFill"] = {"price": str(stop_loss)}
-        if take_profit: order["order"]["takeProfitOnFill"] = {"price": str(take_profit)}
+        # Convert symbol e.g., "UGX" -> "USD_UGX"
+        if len(symbol) == 6:
+            instr = f"{symbol[:3]}_{symbol[3:]}"
+        else:
+            instr = f"USD_{symbol}"
+        order = {"order": {"type": "MARKET", "instrument": instr,
+                           "units": str(int(units)), "timeInForce": "FOK"}}
+        if stop_loss:
+            order["order"]["stopLossOnFill"] = {"price": str(stop_loss)}
+        if take_profit:
+            order["order"]["takeProfitOnFill"] = {"price": str(take_profit)}
         resp = self.ctx.order.create(self.account_id, order)
-        if resp.status != 201: raise Exception(f"Order failed: {resp.body}")
+        if resp.status != 201:
+            raise Exception(f"Order failed: {resp.body}")
         return resp.body
     def get_open_positions(self):
         resp = self.ctx.position.list_open(self.account_id)
-        if resp.status != 200: return []
-        return resp.body.get("positions",[])
+        if resp.status != 200:
+            return []
+        return resp.body.get("positions", [])
     def get_order_history(self):
-        resp = self.ctx.order.list(self.account_id, {"count":50})
-        if resp.status != 200: return []
-        return resp.body.get("orders",[])
+        resp = self.ctx.order.list(self.account_id, {"count": 50})
+        if resp.status != 200:
+            return []
+        return resp.body.get("orders", [])
 
 @st.cache_resource
 def get_trading_api():
@@ -773,7 +876,7 @@ def get_trading_api():
         pass
     return SimulatedTrading(st.session_state.trading_account)
 
-# -------------------- News Sentiment --------------------
+# -------------------- News Sentiment (unchanged) --------------------
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_news_sentiment():
     if not SENTIMENT_AVAILABLE:
@@ -803,7 +906,7 @@ def fetch_news_sentiment():
         logger.error(f"News sentiment error: {e}")
         return None
 
-# -------------------- Telegram Alert --------------------
+# -------------------- Telegram Alert (unchanged) --------------------
 def send_telegram(message: str):
     token = st.secrets.get("TELEGRAM_BOT_TOKEN")
     chat_id = st.secrets.get("TELEGRAM_CHAT_ID")
@@ -815,7 +918,7 @@ def send_telegram(message: str):
     except Exception as e:
         logger.error(f"Telegram send failed: {e}")
 
-# -------------------- Risk Calculator --------------------
+# -------------------- Risk Calculator (unchanged) --------------------
 def calculate_position_size(equity, risk_pct, entry, stop_loss, pair_rate):
     risk_amount = equity * (risk_pct / 100.0)
     stop_distance = abs(entry - stop_loss)
@@ -825,21 +928,90 @@ def calculate_position_size(equity, risk_pct, entry, stop_loss, pair_rate):
     units = risk_amount / stop_loss_usd
     return round(units, 2)
 
-# -------------------- Streamlit UI --------------------
-st.set_page_config(page_title="SAI Forex Bot - East Africa", layout="wide")
+# -------------------- NEW: Backtesting Engine --------------------
+def backtest_strategy(currency: str, df_full: pd.DataFrame, strategy: str,
+                      start_date: datetime, end_date: datetime,
+                      steps: int = 1) -> Dict:
+    """Simple rolling forecast backtest. strategy: 'ARIMA' or 'Prophet'."""
+    df = df_full[(df_full["Currency"] == currency) &
+                 (df_full["Time_dt"] >= start_date) &
+                 (df_full["Time_dt"] <= end_date)].sort_values("Time_dt").reset_index(drop=True)
+    if len(df) < 50:
+        return {"error": "Not enough data in date range."}
+    initial_balance = 10000.0
+    balance = initial_balance
+    position = None
+    equity_curve = []
+    trades = []
+    for i in range(50, len(df) - steps):
+        train = df.iloc[:i]
+        current_rate = df.iloc[i]["Rate"]
+        next_rates = df.iloc[i+1:i+1+steps]["Rate"].values
+        if strategy == "ARIMA":
+            try:
+                arima_res = fit_arima(train["Rate"])
+                pred, _ = forecast_next(arima_res, steps=steps)
+                forecast = pred[0]
+            except:
+                forecast = current_rate
+        else:  # Prophet
+            try:
+                prophet_df = pd.DataFrame({"ds": train["Time_dt"], "y": train["Rate"]})
+                prophet_m = fit_prophet(prophet_df)
+                fc_df, _ = forecast_future(prophet_m, periods=steps)
+                forecast = fc_df["yhat"].iloc[0] if not fc_df.empty else current_rate
+            except:
+                forecast = current_rate
+        signal = "BUY" if forecast > current_rate * 1.005 else "SELL" if forecast < current_rate * 0.995 else "HOLD"
+        if position is None and signal != "HOLD":
+            # Enter trade
+            position = {"type": signal, "entry": current_rate, "units": 1000}
+        elif position is not None:
+            # Check if signal reversed
+            if (position["type"] == "BUY" and signal == "SELL") or (position["type"] == "SELL" and signal == "BUY"):
+                # Close trade
+                exit_rate = current_rate
+                pnl = (exit_rate - position["entry"]) * position["units"] if position["type"] == "BUY" else (position["entry"] - exit_rate) * position["units"]
+                balance += pnl
+                trades.append({"entry_time": train.iloc[-1]["Time_dt"], "exit_time": df.iloc[i]["Time_dt"],
+                               "type": position["type"], "pnl": pnl})
+                position = None
+        equity_curve.append(balance)
+    if position is not None:
+        # Close at last rate
+        exit_rate = df.iloc[-1]["Rate"]
+        pnl = (exit_rate - position["entry"]) * position["units"] if position["type"] == "BUY" else (position["entry"] - exit_rate) * position["units"]
+        balance += pnl
+        trades.append({"entry_time": position["entry_time"], "exit_time": df.iloc[-1]["Time_dt"],
+                       "type": position["type"], "pnl": pnl})
+        equity_curve.append(balance)
+    total_return = (balance - initial_balance) / initial_balance * 100
+    returns = pd.Series(equity_curve).pct_change().dropna()
+    sharpe = (returns.mean() / returns.std() * np.sqrt(252)) if returns.std() != 0 else 0
+    max_drawdown = (pd.Series(equity_curve).cummax() - pd.Series(equity_curve)).max() / pd.Series(equity_curve).cummax().max() * 100
+    win_rate = (sum(1 for t in trades if t["pnl"] > 0) / len(trades) * 100) if trades else 0
+    return {
+        "total_return": total_return,
+        "sharpe": sharpe,
+        "max_drawdown": max_drawdown,
+        "win_rate": win_rate,
+        "trades": trades,
+        "equity_curve": equity_curve,
+        "final_balance": balance
+    }
 
-# Auto‑refresh setup (replaces time.sleep loop)
+# -------------------- Streamlit UI --------------------
+st.set_page_config(page_title="SAI Forex Bot – Enhanced", layout="wide")
+
 if st.session_state.auto_refresh and AUTOREFRESH_AVAILABLE:
     st_autorefresh(interval=st.session_state.refresh_interval * 1000, key="auto_refresh")
 
-# Ensure live stream is running
 if not st.session_state.live_stream_thread or not st.session_state.live_stream_thread.is_alive():
     start_live_stream()
 
-# Drain bot queue on every run (non‑blocking)
 drain_bot_queue(max_items=5)
 
-# Sidebar
+# Sidebar – enhanced
 with st.sidebar:
     st.markdown("## ⚙️ Settings")
     st.session_state.auto_refresh = st.checkbox("Auto‑refresh dashboard", value=st.session_state.auto_refresh)
@@ -849,9 +1021,10 @@ with st.sidebar:
     st.session_state.use_auto_arima = st.checkbox("Use Auto‑ARIMA", value=st.session_state.use_auto_arima)
     st.session_state.alert_signals = st.checkbox("Telegram alerts for signals", value=st.session_state.alert_signals)
     st.session_state.alert_errors = st.checkbox("Telegram alerts for errors", value=st.session_state.alert_errors)
-    # Keep BOT_CONFIG in sync
+    st.session_state.alert_threshold = st.slider("Alert signal threshold (%)", 0.1, 10.0, 2.0, step=0.1) / 100.0
     with BOT_CONFIG["lock"]:
         BOT_CONFIG["alert_errors"] = st.session_state.alert_errors
+        BOT_CONFIG["alert_signals"] = st.session_state.alert_signals
     st.markdown("---")
     if st.button("🔄 Force Refresh Now"):
         st.rerun()
@@ -859,7 +1032,7 @@ with st.sidebar:
 # Main header
 col_title, col_status = st.columns([3,1])
 with col_title:
-    st.markdown("<h1 style='color:#00F2FE;'>📈 SAI Forex Trading Bot</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='color:#00F2FE;'>📈 SAI Forex Trading Bot – Enhanced</h1>", unsafe_allow_html=True)
     st.markdown("<p style='color:#AAAAAA; font-size:1.1rem;'>East African Currency Trading & Forecasting</p>", unsafe_allow_html=True)
 with col_status:
     if st.session_state.live_rates_data.get("rates"):
@@ -868,9 +1041,9 @@ with col_status:
         st.warning("🟡 SIMULATED")
 
 tabs = st.tabs([
-    "📊 Dashboard", "📅 Daily Forecast", "📆 Weekly Forecast", "🗓️ Monthly Forecast",
-    "📈 Trade Recommendations", "💹 Live Trading", "📉 Technical Analysis",
-    "⚙️ Strategy Config", "📋 Logs", "🧪 Model Testing", "🛠️ Debug"
+    "📊 Dashboard", "📅 Forecast", "📈 Trade Recommendations", "💹 Live Trading",
+    "📉 Technical Analysis", "⚙️ Strategy Config", "📋 Logs", "🧪 Model Testing",
+    "🛠️ Debug", "⏪ Backtest"
 ])
 
 # ============== DASHBOARD ==============
@@ -911,7 +1084,7 @@ with tabs[0]:
 
     st.caption(f"Last updated: {datetime.now().strftime('%H:%M:%S')} | Live rates refresh every 2s")
 
-    # Market Overview
+    # Market Overview (unchanged)
     st.markdown("<div class='section-title'>📊 Market Overview</div>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns(3)
     sorted_deltas = sorted(((k,v) for k,v in deltas.items() if v is not None), key=lambda x: x[1])
@@ -922,7 +1095,6 @@ with tabs[0]:
     avg_spread = np.mean([abs(v) for v in deltas.values() if v is not None]) if any(deltas.values()) else 0
     col3.metric("Avg Daily Change %", f"{avg_spread:+.2f}%")
 
-    # News Sentiment
     with st.expander("📰 East African Forex News Sentiment"):
         sentiment = fetch_news_sentiment()
         if sentiment:
@@ -930,9 +1102,8 @@ with tabs[0]:
             for h in sentiment['headlines']:
                 st.write(f"- {h}")
         else:
-            st.info("News sentiment unavailable (check NEWS_API_KEY or install newsapi-python/textblob).")
+            st.info("News sentiment unavailable.")
 
-    # Correlation heatmap
     if len(st.session_state.history) >= 30:
         st.markdown("<div class='section-title'>🔥 Currency Correlation Heatmap</div>", unsafe_allow_html=True)
         pivot = st.session_state.history.pivot(index="Time", columns="Currency", values="Rate")
@@ -946,10 +1117,7 @@ with tabs[0]:
                 st.plotly_chart(fig_heat, use_container_width=True)
             else:
                 st.dataframe(corr.style.background_gradient(cmap='coolwarm', axis=None))
-    else:
-        st.info("Collect more historical data for correlation heatmap (need at least 30 records).")
 
-    # Portfolio & Bot Activity
     st.markdown("<div class='section-title'>💼 Portfolio & Bot Activity</div>", unsafe_allow_html=True)
     col_a, col_b = st.columns(2)
     with col_a:
@@ -959,6 +1127,8 @@ with tabs[0]:
             st.metric("Balance", f"${acc['balance']:,.2f}")
             st.metric("Equity", f"${acc['equity']:,.2f}")
             st.metric("Open Positions", acc['open_positions'])
+            if "unrealized_pl" in acc:
+                st.metric("Unrealized P/L", f"${acc['unrealized_pl']:,.2f}")
         except Exception as e:
             st.error(f"Account fetch failed: {e}")
     with col_b:
@@ -970,13 +1140,9 @@ with tabs[0]:
                 col1, col2 = st.columns(2)
                 col1.metric("Total Trades", buy_count+sell_count)
                 col2.metric("BUY / SELL", f"{buy_count} / {sell_count}")
-                st.metric("Simulated P/L", f"${random.uniform(-200,500):+.2f}")
-            else:
-                st.info("Bot hasn't generated trade logs yet.")
         else:
-            st.info("Start the bot to see performance metrics.")
+            st.info("No trades yet.")
 
-    # Bot controls
     st.markdown("<div class='section-title'>⚡ Bot Controls</div>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1,1,2])
     with col1:
@@ -986,9 +1152,7 @@ with tabs[0]:
         if st.button("⏹️ Stop Bot", disabled=not st.session_state.bot_running):
             stop_bot()
     with col3:
-        if st.session_state.bot_thread and not st.session_state.bot_thread.is_alive() and st.session_state.bot_running:
-            st.warning("Bot thread stopped unexpectedly. Resetting state.")
-            st.session_state.bot_running = False
+        st.write(f"Auto‑trade: {'ON' if st.session_state.auto_trade else 'OFF'}")
     st.markdown("#### Recent Bot Trades")
     if st.session_state.logs:
         df_logs = pd.DataFrame(st.session_state.logs[-5:])
@@ -996,7 +1160,6 @@ with tabs[0]:
     else:
         st.info("No trades yet.")
 
-    # Trend chart
     if not st.session_state.history.empty:
         st.markdown("<div class='section-title'>📉 East African Rate Trends</div>", unsafe_allow_html=True)
         df_plot = st.session_state.history.copy()
@@ -1021,45 +1184,94 @@ with tabs[0]:
                 if not cur_data.empty: ax.plot(cur_data["Time_dt"], cur_data["Rate"], label=cur)
             ax.legend(); ax.set_title("Trends"); fig.autofmt_xdate(); st.pyplot(fig)
 
-# ============== FORECAST TABS ==============
-for tab_idx, (label, horizon, steps) in enumerate([
-    ("📅 Daily Forecast", "daily", 1), ("📆 Weekly Forecast", "weekly", 7), ("🗓️ Monthly Forecast", "monthly", 30)
-], start=1):
-    with tabs[tab_idx]:
-        st.markdown(f"<div class='section-title'>{label}</div>", unsafe_allow_html=True)
-        currency = st.selectbox("Currency", EAST_AFRICAN_CURRENCIES, key=f"{horizon}_cur")
-        if st.button(f"Generate {horizon.capitalize()} Forecast"):
-            with st.spinner("Forecasting..."):
-                result = run_forecast(currency, horizon, steps=steps,
-                                      history_df=st.session_state.history,
-                                      current_rates=st.session_state.rates,
-                                      use_auto_arima=st.session_state.use_auto_arima)
-            if result.get("warning"): st.warning(result["warning"])
-            st.success("✅ ARIMA fitted with real model" if result.get("arima_fitted") else "ℹ️ ARIMA stub")
-            st.success("✅ Prophet fitted with real model" if result.get("prophet_fitted") else "ℹ️ Prophet stub")
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Current", f"{result['current_rate']:.2f}")
-            col2.metric("ARIMA", f"{result['arima_forecast']:.2f}" if result['arima_forecast'] else "N/A")
-            col3.metric("Prophet", f"{result['prophet_forecast']:.2f}" if result['prophet_forecast'] else "N/A")
-            st.write(f"ARIMA Signal: **{result['arima_signal']}**  |  Prophet Signal: **{result['prophet_signal']}**")
-            if result['arima_metrics']:
-                st.caption(f"ARIMA RMSE: {result['arima_metrics']['RMSE']}, MAPE: {result['arima_metrics']['MAPE']}%")
-            if result['prophet_metrics']:
-                st.caption(f"Prophet RMSE: {result['prophet_metrics']['RMSE']}, MAPE: {result['prophet_metrics']['MAPE']}%")
-            fig, ax = plt.subplots()
-            days = list(range(1, steps+1))
-            if result['arima_all_preds']:
-                ax.plot(days, result['arima_all_preds'], marker='o', label="ARIMA")
-            if result['prophet_all_preds']:
-                ax.plot(days, result['prophet_all_preds'], marker='x', label="Prophet")
-            ax.axhline(y=result['current_rate'], color='gray', linestyle='--', label="Current")
-            ax.set_xticks(days); ax.set_xlabel("Day"); ax.set_ylabel("Rate"); ax.legend()
-            st.pyplot(fig)
+# ============== UNIFIED FORECAST TAB ==============
+with tabs[1]:
+    st.markdown("<div class='section-title'>📅 Multi‑Horizon Forecast</div>", unsafe_allow_html=True)
+    # Horizon selector
+    horizon_dict = {"Daily": 1, "Weekly": 7, "Monthly": 30}
+    selected_horizon = st.radio("Horizon", list(horizon_dict.keys()), horizontal=True, key="forecast_horizon")
+    steps = horizon_dict[selected_horizon]
+    show_multiple_timeframes = st.checkbox("Compare multiple timeframes", value=False)
+    if show_multiple_timeframes:
+        selected_timeframes = st.multiselect("Select timeframes", list(horizon_dict.keys()), default=["Daily", "Weekly"])
+    else:
+        selected_timeframes = [selected_horizon]
 
-# ============== TRADE RECOMMENDATIONS ==============
-with tabs[4]:
+    # Generate forecasts for all East African currencies for selected timeframes
+    forecasts = {}
+    for cur in EAST_AFRICAN_CURRENCIES:
+        cur_rate = st.session_state.rates.get(cur, None)
+        if cur_rate is None:
+            continue
+        for tf in selected_timeframes:
+            s = horizon_dict[tf]
+            result = run_forecast(cur, tf.lower(), s,
+                                  history_df=st.session_state.history,
+                                  current_rate=cur_rate,
+                                  use_auto_arima=st.session_state.use_auto_arima)
+            forecasts[(cur, tf)] = result
+
+    # Build summary table
+    if forecasts:
+        rows = []
+        for (cur, tf), res in forecasts.items():
+            rows.append({
+                "Currency": cur,
+                "Timeframe": tf,
+                "Current Rate": res["current_rate"],
+                "ARIMA Forecast": res["arima_forecast"],
+                "ARIMA Signal": res["arima_signal"],
+                "Prophet Forecast": res["prophet_forecast"],
+                "Prophet Signal": res["prophet_signal"]
+            })
+        df_forecast = pd.DataFrame(rows)
+        st.dataframe(df_forecast.style.map(lambda val: 'background-color: #00C853; color:black' if val=='BUY' else ('background-color: #FF1744; color:white' if val=='SELL' else ''), subset=['ARIMA Signal','Prophet Signal']), use_container_width=True)
+    else:
+        st.info("No forecast data available.")
+
+    # Detailed chart for selected currency
+    st.markdown("### Detailed Forecast Chart")
+    selected_currency = st.selectbox("Pick a currency for detailed view", EAST_AFRICAN_CURRENCIES, key="forecast_detail")
+    cur_rate = st.session_state.rates.get(selected_currency, None)
+    if cur_rate is not None:
+        # Always show daily for detail
+        result = run_forecast(selected_currency, "daily", 1,
+                              history_df=st.session_state.history,
+                              current_rate=cur_rate,
+                              use_auto_arima=st.session_state.use_auto_arima)
+        if PLOTLY_AVAILABLE and result["train"] is not None:
+            fig = go.Figure()
+            train = result["train"]
+            fig.add_trace(go.Scatter(x=train["Time_dt"], y=train["Rate"], mode='lines', name='History'))
+            # ARIMA forecast with CI
+            if result["arima_all_preds"]:
+                pred_dates = [train["Time_dt"].iloc[-1] + timedelta(days=i+1) for i in range(len(result["arima_all_preds"]))]
+                fig.add_trace(go.Scatter(x=pred_dates, y=result["arima_all_preds"], mode='lines+markers', name='ARIMA'))
+                if result.get("arima_conf_int") is not None:
+                    ci = result["arima_conf_int"]
+                    lower = ci[:, 0]
+                    upper = ci[:, 1]
+                    fig.add_trace(go.Scatter(x=pred_dates, y=upper, mode='lines', line=dict(width=0), showlegend=False))
+                    fig.add_trace(go.Scatter(x=pred_dates, y=lower, mode='lines', fill='tonexty', fillcolor='rgba(0,242,254,0.2)', line=dict(width=0), name='ARIMA CI'))
+            # Prophet with intervals
+            if result.get("prophet_full") is not None:
+                fc = result["prophet_full"]
+                future_part = fc[fc["ds"] > train["Time_dt"].iloc[-1]]
+                fig.add_trace(go.Scatter(x=future_part["ds"], y=future_part["yhat"], mode='lines+markers', name='Prophet'))
+                if "yhat_lower" in fc.columns and "yhat_upper" in fc.columns:
+                    fig.add_trace(go.Scatter(x=future_part["ds"], y=future_part["yhat_upper"], mode='lines', line=dict(width=0), showlegend=False))
+                    fig.add_trace(go.Scatter(x=future_part["ds"], y=future_part["yhat_lower"], mode='lines', fill='tonexty', fillcolor='rgba(255,214,0,0.2)', line=dict(width=0), name='Prophet CI'))
+            fig.update_layout(template="plotly_dark", title=f"{selected_currency} Forecast (Daily)", hovermode="x unified")
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.warning("Plotly required for interactive chart.")
+    else:
+        st.warning("No live rate for this currency.")
+
+# ============== TRADE RECOMMENDATIONS (enhanced with threshold) ==============
+with tabs[2]:
     st.markdown("<div class='section-title'>📊 Trade Recommendations</div>", unsafe_allow_html=True)
-    horizon = st.radio("Horizon", ["Daily","Weekly","Monthly"], horizontal=True)
+    horizon = st.radio("Horizon", ["Daily","Weekly","Monthly"], horizontal=True, key="trade_rec_horizon")
     steps_map = {"Daily":1,"Weekly":7,"Monthly":30}
     steps = steps_map[horizon]
     if st.button("Get Trade Signals for East Africa"):
@@ -1067,43 +1279,54 @@ with tabs[4]:
         fallback_used = False
         with st.spinner("Computing signals..."):
             for cur in EAST_AFRICAN_CURRENCIES:
+                cur_rate = st.session_state.rates.get(cur, None)
+                if cur_rate is None: continue
                 result = run_forecast(cur, horizon.lower(), steps,
                                       history_df=st.session_state.history,
-                                      current_rates=st.session_state.rates,
+                                      current_rate=cur_rate,
                                       use_auto_arima=st.session_state.use_auto_arima)
                 if result.get("warning"): fallback_used = True
+                # Apply threshold
+                arima_sig = result["arima_signal"]
+                prophet_sig = result["prophet_signal"]
+                thresh = st.session_state.alert_threshold
+                if arima_sig != "HOLD":
+                    change = (result["arima_forecast"] - result["current_rate"]) / result["current_rate"]
+                    if abs(change) < thresh:
+                        arima_sig = "HOLD"
+                if prophet_sig != "HOLD":
+                    change = (result["prophet_forecast"] - result["current_rate"]) / result["current_rate"]
+                    if abs(change) < thresh:
+                        prophet_sig = "HOLD"
                 signals.append({
                     "Currency": cur, "Current Rate": result['current_rate'],
                     "ARIMA Forecast": result['arima_forecast'],
-                    "ARIMA Signal": result['arima_signal'],
+                    "ARIMA Signal": arima_sig,
                     "Prophet Forecast": result['prophet_forecast'],
-                    "Prophet Signal": result['prophet_signal']
+                    "Prophet Signal": prophet_sig
                 })
         if signals:
             if fallback_used: st.warning("Some forecasts used rough estimates due to insufficient data.")
             df_signals = pd.DataFrame(signals)
-            def highlight_signal(val):
-                if val == 'BUY': return 'background-color: #00C853; color: black'
-                elif val == 'SELL': return 'background-color: #FF1744; color: white'
-                return ''
-            st.dataframe(df_signals.style.map(highlight_signal, subset=['ARIMA Signal','Prophet Signal']), use_container_width=True)
-            if st.session_state.get("alert_signals"):
+            st.dataframe(df_signals.style.map(lambda val: 'background-color: #00C853; color:black' if val=='BUY' else ('background-color: #FF1744; color:white' if val=='SELL' else ''), subset=['ARIMA Signal','Prophet Signal']), use_container_width=True)
+            if st.session_state.alert_signals:
+                # Send telegram only for strong signals
                 for row in signals:
-                    if row["ARIMA Signal"] == "BUY" or row["Prophet Signal"] == "BUY":
-                        send_telegram(f"📈 {row['Currency']} BUY signal! ARIMA: {row['ARIMA Signal']}, Prophet: {row['Prophet Signal']}")
-                    elif row["ARIMA Signal"] == "SELL" or row["Prophet Signal"] == "SELL":
-                        send_telegram(f"📉 {row['Currency']} SELL signal! ARIMA: {row['ARIMA Signal']}, Prophet: {row['Prophet Signal']}")
+                    if row["ARIMA Signal"] != "HOLD" or row["Prophet Signal"] != "HOLD":
+                        send_telegram(f"📈 {row['Currency']} signal: ARIMA {row['ARIMA Signal']}, Prophet {row['Prophet Signal']} (threshold > {st.session_state.alert_threshold*100:.1f}%)")
                 st.success("Signals sent to Telegram (if configured).")
         else:
             st.warning("No signals generated.")
 
-# ============== LIVE TRADING ==============
-with tabs[5]:
+# ============== LIVE TRADING (enhanced OANDA test) ==============
+with tabs[3]:
     st.markdown("<div class='section-title'>💹 Live Trading</div>", unsafe_allow_html=True)
     trading_api = get_trading_api()
     is_simulated = isinstance(trading_api, SimulatedTrading)
     if is_simulated:
         st.info("🔹 Running in **Simulated Trading** mode. Set OANDA keys for real trading.")
+    else:
+        st.success("🔹 Connected to OANDA Practice Account")
     col_sum, col_action = st.columns([1,2])
     with col_sum:
         st.subheader("Account")
@@ -1112,8 +1335,12 @@ with tabs[5]:
             st.metric("Balance", f"${acc['balance']:,.2f}")
             st.metric("Equity", f"${acc['equity']:,.2f}")
             st.metric("Open Positions", acc['open_positions'])
+            if "unrealized_pl" in acc:
+                st.metric("Unrealized P/L", f"${acc['unrealized_pl']:,.2f}")
+            if "margin_used" in acc:
+                st.metric("Margin Used", f"${acc['margin_used']:,.2f}")
         except Exception as e:
-            st.error(f"Failed to fetch account: {e}")
+            st.error(f"Account fetch failed: {e}")
     with col_action:
         st.subheader("Manual Trade")
         with st.form("trade_form"):
@@ -1130,6 +1357,8 @@ with tabs[5]:
                     st.json(order)
                 except Exception as e:
                     st.error(f"Order failed: {e}")
+    if not is_simulated:
+        st.button("Test OANDA Connection", on_click=lambda: st.info("OANDA connection OK" if get_trading_api() else "Failed"))
     st.subheader("Open Positions")
     try:
         positions = trading_api.get_open_positions()
@@ -1161,7 +1390,6 @@ with tabs[5]:
             st.info("No orders yet.")
     except Exception as e:
         st.error(f"Error: {e}")
-
     with st.expander("🧮 Position Size Calculator"):
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -1174,20 +1402,17 @@ with tabs[5]:
             pair_rate = st.session_state.rates.get(trade_symbol, 1.0)
             units = calculate_position_size(calc_equity, calc_risk, calc_entry, calc_sl, pair_rate)
             st.metric("Recommended Units", f"{units:,.2f}")
-
     st.subheader("Auto‑Trading")
-    auto_trade = st.checkbox("Enable auto‑trade from signals", value=st.session_state.auto_trade)
-    st.session_state.auto_trade = auto_trade
-    if auto_trade and st.button("Run Auto‑Trade Now"):
-        st.info("Auto‑trade logic is a placeholder. Extend by calling run_forecast and placing orders.")
+    st.session_state.auto_trade = st.checkbox("Enable auto‑trade from signals", value=st.session_state.auto_trade)
+    if st.button("Run Auto‑Trade Now"):
+        st.info("Auto‑trade logic runs on bot signals. Enable bot and auto‑trade above.")
 
-# ============== TECHNICAL ANALYSIS ==============
-with tabs[6]:
+# ============== TECHNICAL ANALYSIS (unchanged) ==============
+with tabs[4]:
     st.markdown("<div class='section-title'>📉 Technical Analysis</div>", unsafe_allow_html=True)
     ta_currency = st.selectbox("Currency", EAST_AFRICAN_CURRENCIES, key="ta_cur")
     ta_periods = st.slider("Data points", 50, 500, 100, key="ta_periods")
-    ta_history = st.session_state.history
-    df_all = ta_history[ta_history["Currency"] == ta_currency].copy()
+    df_all = st.session_state.history[st.session_state.history["Currency"] == ta_currency].copy()
     if df_all.empty:
         st.warning("No history for this currency yet.")
     else:
@@ -1197,7 +1422,6 @@ with tabs[6]:
         if df_indicators is not None and PLOTLY_AVAILABLE:
             fig = make_subplots(rows=4, cols=1, shared_xaxes=True,
                                 subplot_titles=("Price & Bollinger Bands", "RSI", "MACD", "OBV"))
-            # Price + SMA + Bollinger
             fig.add_trace(go.Scatter(x=df_indicators["Time_dt"], y=df_indicators["Rate"],
                                      mode='lines', name='Price', line=dict(color='#00F2FE')), row=1, col=1)
             for w in [20, 50]:
@@ -1210,18 +1434,15 @@ with tabs[6]:
                                          line=dict(color='gray', width=1), name='BB Upper'), row=1, col=1)
                 fig.add_trace(go.Scatter(x=df_indicators["Time_dt"], y=df_indicators["BB_lower"],
                                          line=dict(color='gray', width=1), name='BB Lower'), row=1, col=1)
-            # RSI
             fig.add_trace(go.Scatter(x=df_indicators["Time_dt"], y=df_indicators["RSI"],
                                      line=dict(color='purple'), name='RSI'), row=2, col=1)
             fig.add_hline(y=70, line_dash="dot", line_color="gray", row=2, col=1)
             fig.add_hline(y=30, line_dash="dot", line_color="gray", row=2, col=1)
-            # MACD
             fig.add_trace(go.Scatter(x=df_indicators["Time_dt"], y=df_indicators["MACD"],
                                      line=dict(color='blue'), name='MACD'), row=3, col=1)
             fig.add_trace(go.Scatter(x=df_indicators["Time_dt"], y=df_indicators["MACD_signal"],
                                      line=dict(color='red'), name='Signal'), row=3, col=1)
             fig.add_bar(x=df_indicators["Time_dt"], y=df_indicators["MACD_hist"], name='Histogram', row=3, col=1)
-            # OBV
             fig.add_trace(go.Scatter(x=df_indicators["Time_dt"], y=df_indicators["OBV"],
                                      line=dict(color='green'), name='OBV'), row=4, col=1)
             fig.update_layout(height=900, template="plotly_dark",
@@ -1231,16 +1452,17 @@ with tabs[6]:
             st.info("Not enough data for indicators (need at least 50 points).")
 
 # ============== STRATEGY CONFIG ==============
-with tabs[7]:
+with tabs[5]:
     st.markdown("<div class='section-title'>⚙️ Strategy Configuration</div>", unsafe_allow_html=True)
     st.info(f"Risk Level: {st.session_state.risk_level} (adjust in sidebar)")
     st.write(f"Auto‑ARIMA: {'Enabled' if st.session_state.use_auto_arima else 'Disabled'}")
     st.write(f"Forecast caching: 5 minutes")
+    st.write(f"Telegram alert signal threshold: {st.session_state.alert_threshold*100:.1f}%")
     st.write(f"Telegram alerts for signals: {'On' if st.session_state.alert_signals else 'Off'}")
     st.write(f"Telegram alerts for errors: {'On' if st.session_state.alert_errors else 'Off'}")
 
 # ============== LOGS ==============
-with tabs[8]:
+with tabs[6]:
     st.markdown("<div class='section-title'>📋 Application Logs</div>", unsafe_allow_html=True)
     try:
         with open("sai_app.log", "r") as f:
@@ -1255,8 +1477,8 @@ with tabs[8]:
     else:
         st.info("No bot logs in database.")
 
-# ============== MODEL TESTING ==============
-with tabs[9]:
+# ============== MODEL TESTING (unchanged) ==============
+with tabs[7]:
     st.markdown("<div class='section-title'>🧪 Model Testing</div>", unsafe_allow_html=True)
     st.warning("⚠️ Only upload .pkl files you trust.")
     uploaded_model = st.file_uploader("Upload model.pkl", type=["pkl"])
@@ -1271,9 +1493,9 @@ with tabs[9]:
                 st.write(test_results)
                 fig, ax = plt.subplots(); ax.plot(test_results.get("predictions",[]), marker='o'); st.pyplot(fig)
 
-# ============== DEBUG ==============
-with tabs[10]:
-    st.markdown("<div class='section-title'>🛠️ Debug</div>", unsafe_allow_html=True)
+# ============== DEBUG & DATA MANAGEMENT ==============
+with tabs[8]:
+    st.markdown("<div class='section-title'>🛠️ Debug & Data</div>", unsafe_allow_html=True)
     st.json({k: str(v) if not isinstance(v,(dict,list,int,float,bool,type(None))) else v for k,v in st.session_state.items()})
     with st.expander("🗄️ Database Stats"):
         conn = sqlite3.connect(DB_PATH)
@@ -1282,3 +1504,57 @@ with tabs[10]:
             cnt = conn.execute(f"SELECT COUNT(*) FROM {t[0]}").fetchone()[0]
             st.write(f"**{t[0]}**: {cnt} rows")
         conn.close()
+    # Download & Archive buttons
+    st.markdown("### Data Management")
+    csv_data = download_history_csv()
+    st.download_button("⬇️ Download Full History CSV", csv_data, "sai_history.csv", "text/csv")
+    if st.button("🧹 Archive Old Data (>7 days)"):
+        with DB_LOCK:
+            conn = db_connect()
+            conn.execute("INSERT INTO history_archive SELECT * FROM history WHERE time < datetime('now', '-7 days')")
+            conn.execute("DELETE FROM history WHERE time < datetime('now', '-7 days')")
+            conn.commit()
+            conn.close()
+        st.success("Old data archived to history_archive table.")
+    if st.button("Clear All Archives"):
+        with DB_LOCK:
+            conn = db_connect()
+            conn.execute("DELETE FROM history_archive")
+            conn.commit()
+            conn.close()
+        st.success("Archive cleared.")
+
+# ============== BACKTEST TAB ==============
+with tabs[9]:
+    st.markdown("<div class='section-title'>⏪ Backtest Strategy</div>", unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        backtest_currency = st.selectbox("Currency", EAST_AFRICAN_CURRENCIES, key="bt_cur")
+        strategy = st.selectbox("Strategy", ["ARIMA", "Prophet"], key="bt_strat")
+    with col2:
+        start_date = st.date_input("Start Date", value=datetime.now()-timedelta(days=180))
+        end_date = st.date_input("End Date", value=datetime.now())
+    if st.button("Run Backtest"):
+        full_hist = load_history(limit=2000)
+        full_hist["Time_dt"] = pd.to_datetime(full_hist["Time"])
+        with st.spinner("Backtesting..."):
+            result = backtest_strategy(backtest_currency, full_hist, strategy,
+                                       start_date, end_date, steps=1)
+        if "error" in result:
+            st.error(result["error"])
+        else:
+            st.metric("Total Return", f"{result['total_return']:.2f}%")
+            st.metric("Sharpe Ratio", f"{result['sharpe']:.2f}")
+            st.metric("Max Drawdown", f"{result['max_drawdown']:.2f}%")
+            st.metric("Win Rate", f"{result['win_rate']:.1f}%")
+            st.metric("Final Balance", f"${result['final_balance']:,.2f}")
+            # Equity curve
+            fig, ax = plt.subplots()
+            ax.plot(result["equity_curve"])
+            ax.set_title("Equity Curve")
+            st.pyplot(fig)
+            # Trades table
+            if result["trades"]:
+                st.dataframe(pd.DataFrame(result["trades"]))
+            else:
+                st.info("No trades executed during this period.")

@@ -1391,14 +1391,13 @@ with tabs[0]:
     avg_spread = np.mean([abs(v) for v in deltas.values() if v is not None]) if any(deltas.values()) else 0
     col3.metric("Avg Daily Change %", f"{avg_spread:+.2f}%")
 
+    sentiment = fetch_news_sentiment()
+if sentiment:
     with st.expander("📰 East African Forex News Sentiment"):
-        sentiment = fetch_news_sentiment()
-        if sentiment:
-            st.metric("Overall Sentiment", f"{sentiment['score']:.2f}", sentiment['interpretation'])
-            for h in sentiment['headlines']:
-                st.write(f"- {h}")
-        else:
-            st.info("News sentiment unavailable.")
+        st.metric("Overall Sentiment", f"{sentiment['score']:.2f}", sentiment['interpretation'])
+        for h in sentiment['headlines']:
+            st.write(f"- {h}")
+# If sentiment is None, the expander simply won't appear.
 
     if len(st.session_state.history) >= 30:
         st.markdown("<div class='section-title'>🔥 Currency Correlation Heatmap</div>", unsafe_allow_html=True)

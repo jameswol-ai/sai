@@ -1,67 +1,50 @@
-# run_bot.py
-"""
-Standalone runner for the SAI trading bot.
-Provides CLI flags for status, sandbox, live trading, and config loading.
-"""
+def run_bot():
+    """
+    Called by the bot thread. Scans all available currencies and returns
+    a list of trade signals (or empty list). Executes trades if auto_trade is on.
+    """
+    with st.session_state.live_rates_lock:
+        rates = st.session_state.live_rates_data.get("rates", {})
+    if not rates:
+        return []
 
-import argparse
-import yaml
-from sai.bot.main import run_bot
+    df_hist = st.session_state.history
+    if df_hist is None or df_hist.empty:
+        return []
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Run the SAI trading bot with configurable modes."
-    )
-    parser.add_argument(
-        "--status",
-        action="store_true",
-        help="Print bot status without running trades."
-    )
-    parser.add_argument(
-        "--sandbox",
-        action="store_true",
-        help="Run trades in sandbox mode (no real execution)."
-    )
-    parser.add_argument(
-        "--live",
-        action="store_true",
-        help="Run trades in live mode (real execution)."
-    )
-    parser.add_argument(
-        "--config",
-        type=str,
-        help="Path to YAML/JSON config file (e.g., configs/dev.yaml)."
-    )
+    # Only process East African currencies that exist in live rates
+    available = [c for c in EAST_AFRICAN_CURRENCIES if c in rates]
+    if not available:
+        return []
 
-    args = parser.parse_args()
+    signals = []
 
-    # Load config if provided
-    config = None
-    if args.config:
-        print(f"Loading config from {args.config}...")
-        if args.config.endswith(".yaml") or args.config.endswith(".yml"):
-            with open(args.config, "r") as f:
-                config = yaml.safe_load(f)
-        elif args.config.endswith(".json"):
-            import json
-            with open(args.config, "r") as f:
-                config = json.load(f)
-        else:
-            print("Unsupported config format. Use YAML or JSON.")
+    for cur in available:
+        cur_data = df_hist[df_hist["Currency"] == cur].tail(100).copy()
+        cur_data["Time_dt"] = pd.to_datetime(cur_data["Time"])
+        cur_data = cur_data.sort_values("Time_dt")
 
-    # Handle modes
-    if args.status:
-        print("SAI Bot Status: Ready ✅")
-        if config:
-            print("Loaded Config Keys:", list(config.keys()))
-    elif args.sandbox:
-        print("Starting SAI bot in sandbox mode...")
-        run_bot(mode="sandbox", config=config)
-    elif args.live:
-        print("Starting SAI bot in LIVE mode ⚡")
-        run_bot(mode="live", config=config)
-    else:
-        print("No mode specified. Use --status, --sandbox, or --live.")
+        if len(cur_data) < 50:
+            continue   # not enough data for indicators
 
-if __name__ == "__main__":
-    main()
+        trade_signal = compute_trade_signal(cur_data, st.session_state.risk_level)
+        if trade_signal:
+            trade_signal["time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            trade_signal["amount"] = max(100, trade_signal["amount"])
+            signals.append(trade_signal)
+
+            # Auto‑trade if enabled
+            if st.session_state.auto_trade:
+                trading_api = get_trading_api()
+                try:
+                    units = trade_signal["amount"] if trade_signal["trade"] == "BUY" else -trade_signal["amount"]
+                    trading_api.place_order(
+                        symbol=trade_signal["symbol"],
+                        units=units
+                    )
+                    logger.info(f"Bot auto‑trade: {trade_signal}")
+                except Exception as e:
+                    logger.error(f"Bot trade failed for {cur}: {e}")
+                    trade_signal["error"] = str(e)
+
+    return signals

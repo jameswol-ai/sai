@@ -1,115 +1,90 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import time
-import threading
-import logging
-from prometheus_client import Gauge, Counter, start_http_server
+import os
+import subprocess
 
-# --- Logging Setup ---
-LOG_FILE = "logs/trading.log"
-logging.basicConfig(
-    filename=LOG_FILE,
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
+# Set up page configurations
+st.set_page_config(
+    page_title="Sai AI Trading Bot Control Center",
+    page_icon="📈",
+    layout="wide"
 )
-logger = logging.getLogger("sai_trading_bot")
 
-# Example log generator (replace with real trading loop logs)
-def generate_logs():
-    while True:
-        logger.info("Executed trade at simulated price 100.25")
-        logger.warning("Latency spike detected: 2.3s")
-        time.sleep(20)
+st.title("📈 Sai AI Trading Bot Control Center")
+st.write("A dashboard to monitor, configure, and execute your trading algorithms.")
 
-threading.Thread(target=generate_logs, daemon=True).start()
+# Sidebar for Configuration
+st.sidebar.header("Configuration Settings")
+api_key = st.sidebar.text_input("Exchange API Key", type="password")
+api_secret = st.sidebar.text_input("Exchange Secret Key", type="password")
+trading_pair = st.sidebar.selectbox("Trading Pair", ["BTC/USDT", "ETH/USDT", "SOL/USDT"])
+timeframe = st.sidebar.selectbox("Timeframe", ["1m", "5m", "15m", "1h", "4h"])
+risk_level = st.sidebar.slider("Risk Management (%)", 1.0, 10.0, 2.0)
 
-# --- Prometheus Metrics ---
-pnl_total = Gauge("sai_pnl_total", "Total Profit and Loss")
-trades_per_minute = Gauge("sai_trades_per_minute", "Trades executed per minute")
-trade_latency = Gauge("sai_trade_latency_seconds", "Latency per trade in seconds")
-open_positions = Gauge("sai_open_positions", "Number of open positions")
-model_version = Gauge("sai_model_version", "Current ML model version")
-trade_counter = Counter("sai_trade_count", "Total trades executed")
+# Main Dashboard Layout
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.metric(label="Current Balance", value="$1,245.50", delta="+3.2%")
+with col2:
+    st.metric(label="Open Positions", value="1", delta=None)
+with col3:
+    st.metric(label="Total Realized P&L", value="+$145.20", delta="11.6%")
 
-pnl_history, trade_freq_history, timestamps = [], [], []
+# Market Data & Visualization Section
+st.subheader("Market Trend Analysis")
+# Generate dummy data for visualization (Replace this with real API data fetch from Sai's core modules)
+chart_data = pd.DataFrame(
+    np.random.randn(20, 3),
+    columns=['Price', 'SMA_20', 'EMA_50']
+)
+st.line_chart(chart_data)
 
-def start_metrics_server():
-    start_http_server(8000)
-    while True:
-        pnl_value = 1250.75
-        trades_value = 5
-        latency_value = 0.85
-        positions_value = 3
-        model_value = 20260427
+# Bot Execution Controller
+st.subheader("Bot Execution")
 
-        pnl_total.set(pnl_value)
-        trades_per_minute.set(trades_value)
-        trade_latency.set(latency_value)
-        open_positions.set(positions_value)
-        model_version.set(model_value)
-        trade_counter.inc()
+if 'bot_process' not in st.session_state:
+    st.session_state.bot_process = None
 
-        timestamps.append(time.strftime("%H:%M:%S"))
-        pnl_history.append(pnl_value)
-        trade_freq_history.append(trades_value)
+start_bot = st.button("Start AI Bot", type="primary")
+stop_bot = st.button("Stop AI Bot")
 
-        time.sleep(15)
+# Replace 'main.py' with the actual entry-point script name in the repository
+bot_entry_script = "main.py" 
 
-threading.Thread(target=start_metrics_server, daemon=True).start()
+if start_bot:
+    if st.session_state.bot_process is None:
+        st.write("Starting the bot process...")
+        try:
+            # Execute the core bot script in the background
+            st.session_state.bot_process = subprocess.Popen(
+                ["python", bot_entry_script],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            st.success("Sai AI Trading Bot is now running.")
+        except Exception as e:
+            st.error(f"Failed to start bot: {e}")
+    else:
+        st.warning("Bot is already running.")
 
-# --- Tabs Layout ---
-tab1, tab2, tab3, tab4 = st.tabs(["📊 Dashboard", "⚠️ Risk Monitor", "📝 Logs", "⚙️ Config"])
+if stop_bot:
+    if st.session_state.bot_process is not None:
+        st.session_state.bot_process.terminate()
+        st.session_state.bot_process = None
+        st.info("Sai AI Trading Bot has been stopped.")
+    else:
+        st.warning("No running bot process found.")
 
-with tab1:
-    st.title("Trading Dashboard")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("PnL ($)", f"{pnl_total._value.get():.2f}")
-    col2.metric("Trades/min", f"{trades_per_minute._value.get():.0f}")
-    col3.metric("Latency (s)", f"{trade_latency._value.get():.2f}")
-    st.metric("Open Positions", f"{open_positions._value.get():.0f}")
-    st.metric("Model Version", f"{model_version._value.get():.0f}")
-    st.metric("Total Trades", f"{trade_counter._value.get():.0f}")
-
-    if len(timestamps) > 1:
-        df = pd.DataFrame({
-            "Timestamp": timestamps,
-            "PnL": pnl_history,
-            "Trades/min": trade_freq_history
-        })
-        st.line_chart(df.set_index("Timestamp")[["PnL"]])
-        st.line_chart(df.set_index("Timestamp")[["Trades/min"]])
-
-with tab2:
-    st.title("Risk Monitor")
-    risk_status = "Healthy"
-    risk_color = "✅ GREEN"
-    if pnl_total._value.get() < -1000 or trade_latency._value.get() > 2.0 or open_positions._value.get() > 10:
-        risk_status = "Critical"
-        risk_color = "🚨 RED"
-    elif pnl_total._value.get() < 0 or trade_latency._value.get() > 1.0 or open_positions._value.get() > 5:
-        risk_status = "Warning"
-        risk_color = "⚠️ YELLOW"
-    st.subheader("Overall Risk Status")
-    st.write(f"{risk_color} — {risk_status}")
-
-    if pnl_total._value.get() < -1000:
-        st.error("🚨 CRITICAL: Losses exceed $1000! Immediate action required.")
-    elif pnl_total._value.get() < 0:
-        st.warning("⚠️ Bot is currently running at a loss.")
-    if trade_latency._value.get() > 2.0:
-        st.warning("⚠️ High latency detected (>2s per trade).")
-    if open_positions._value.get() > 10:
-        st.warning("⚠️ Too many open positions. Risk exposure is high.")
-
-with tab3:
-    st.title("Logs")
-    try:
-        with open(LOG_FILE, "r") as f:
-            logs = f.readlines()[-20:]  # Show last 20 log entries
-        st.text_area("Recent Logs", "".join(logs), height=300)
-    except FileNotFoundError:
-        st.info("No logs available yet.")
-
-with tab4:
-    st.title("Config")
-    st.write("⚙️ Strategy and risk configuration options go here.")
+# Display Logs
+st.subheader("System Logs")
+log_placeholder = st.empty()
+if st.session_state.bot_process is not None:
+    # Read output lines dynamically
+    output = st.session_state.bot_process.stdout.readline()
+    if output:
+        st.text(output.strip())
+else:
+    st.text("Bot offline. No live logs available.")

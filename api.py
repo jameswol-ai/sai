@@ -2,6 +2,17 @@
 from flask import Flask, request, jsonify
 import joblib
 import pandas as pd
+try:
+    import matplotlib.pyplot as plt
+except ImportError:
+    plt = None
+
+if plt:
+    fig, ax = plt.subplots()
+    ax.plot(data)
+    st.pyplot(fig)
+else:
+    st.warning("Matplotlib unavailable. Using Streamlit charts.")
 
 app = Flask(__name__)
 

@@ -1,3587 +1,494 @@
 # ============================================================
-# SAI AI Forex Intelligence v6.0
-# FULL SINGLE FILE STREAMLIT EDITION
-# PART 1/4
+# SAI AI Forex Trading Bot - Full Streamlit Dashboard
+# Merged Version: UI from PART 4/4 + Backend from v3.0
 # ============================================================
 
 import streamlit as st
+import pandas as pd
+import numpy as np
 import sqlite3
 import hashlib
 import random
-import threading
-import queue
 import time
-import logging
-import warnings
 from pathlib import Path
-from datetime import datetime, timedelta
-
-import pandas as pd
-import numpy as np
-import requests
-
+from datetime import datetime
+import plotly.express as px
+import plotly.graph_objects as go
 
 # ============================================================
-# STREAMLIT CONFIG
+# PAGE CONFIG
 # ============================================================
-
 st.set_page_config(
-    page_title="SAI AI Forex Intelligence",
+    page_title="SAI AI Forex Bot",
     page_icon="📈",
     layout="wide"
 )
 
-
 BASE_DIR = Path(__file__).parent
-
 USER_DB = BASE_DIR / "sai_users.db"
-TRADING_DB = BASE_DIR / "sai_trading.db"
-
-
-# ============================================================
-# LOGGING
-# ============================================================
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s"
-)
-
-logger = logging.getLogger("SAI")
-
+TRADE_DB = BASE_DIR / "sai_trading.db"
 
 # ============================================================
-# OPTIONAL CHARTS
+# DATABASE SETUP
 # ============================================================
-
-try:
-    import plotly.graph_objects as go
-    PLOTLY_AVAILABLE = True
-
-except Exception:
-
-    PLOTLY_AVAILABLE = False
-
-
-
-# ============================================================
-# GLOBAL THREAD SAFE QUEUE
-# ============================================================
-
-BOT_QUEUE = queue.Queue()
-
-BOT_THREAD = None
-BOT_STOP_EVENT = None
-
-
-
-# ============================================================
-# DATABASE CORE
-# ============================================================
-
-def db(path):
-
-    return sqlite3.connect(
-        path,
-        check_same_thread=False
-    )
-
-
+def connect(db_path):
+    return sqlite3.connect(db_path, check_same_thread=False)
 
 def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
 
-    return hashlib.sha256(
-        password.encode()
-    ).hexdigest()
-
-
-
-# ============================================================
-# DATABASE INITIALIZATION + MIGRATION
-# ============================================================
-
-def init_databases():
-
-    # ---------------- USER DATABASE ----------------
-
-    conn=db(USER_DB)
-
-
+def init_database():
+    conn = connect(USER_DB)
     conn.execute("""
-    CREATE TABLE IF NOT EXISTS users(
-
-        username TEXT PRIMARY KEY,
-        password TEXT NOT NULL,
-        role TEXT DEFAULT 'user',
-        email TEXT DEFAULT ''
-
-    )
+        CREATE TABLE IF NOT EXISTS users(
+            username TEXT PRIMARY KEY,
+            password TEXT,
+            role TEXT
+        )
     """)
-
-
-    columns=[
-        row[1]
-        for row in conn.execute(
-            "PRAGMA table_info(users)"
-        ).fetchall()
-    ]
-
-
-    if "role" not in columns:
-
+    count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    if count == 0:
         conn.execute(
-            "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'"
+            "INSERT INTO users VALUES(?,?,?)",
+            ("admin", hash_password("admin123"), "admin")
         )
-
-
-    if "email" not in columns:
-
-        conn.execute(
-            "ALTER TABLE users ADD COLUMN email TEXT DEFAULT ''"
-        )
-
-
-
-    count=conn.execute(
-        "SELECT COUNT(*) FROM users"
-    ).fetchone()[0]
-
-
-
-    if count==0:
-
-        conn.execute(
-            """
-            INSERT INTO users
-            (
-            username,
-            password,
-            role,
-            email
-            )
-            VALUES(?,?,?,?)
-            """,
-            (
-                "admin",
-                hash_password("admin123"),
-                "admin",
-                "admin@sai.ai"
-            )
-        )
-
-
-
     conn.commit()
     conn.close()
 
-
-
-    # ---------------- TRADING DATABASE ----------------
-
-
-    conn=db(TRADING_DB)
-
-
-
+    conn = connect(TRADE_DB)
     conn.executescript("""
-
-    CREATE TABLE IF NOT EXISTS trades(
-
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT,
-        time TEXT,
-        symbol TEXT,
-        action TEXT,
-        price REAL,
-        pnl REAL
-
-    );
-
-
-    CREATE TABLE IF NOT EXISTS account(
-
-        username TEXT PRIMARY KEY,
-        balance REAL,
-        equity REAL
-
-    );
-
-
-    CREATE TABLE IF NOT EXISTS market(
-
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT,
-        time TEXT,
-        currency TEXT,
-        rate REAL
-
-    );
-
+        CREATE TABLE IF NOT EXISTS trades(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT,
+            time TEXT,
+            symbol TEXT,
+            action TEXT,
+            price REAL,
+            pnl REAL
+        );
+        CREATE TABLE IF NOT EXISTS balance(
+            username TEXT PRIMARY KEY,
+            amount REAL
+        );
     """)
-
-
-
+    # Initialize balance for admin if not exist
+    cur = conn.execute("SELECT amount FROM balance WHERE username='admin'")
+    if cur.fetchone() is None:
+        conn.execute("INSERT INTO balance VALUES(?,?)", ("admin", 10000.0))
     conn.commit()
-
     conn.close()
 
-
-
-init_databases()
-
-
+init_database()
 
 # ============================================================
-# USER MANAGEMENT
+# USER SYSTEM
 # ============================================================
-
-def authenticate(username,password):
-
-    conn=db(USER_DB)
-
-
-    row=conn.execute(
-        """
-        SELECT role
-        FROM users
-        WHERE username=?
-        AND password=?
-        """,
-        (
-            username,
-            hash_password(password)
-        )
+def login(username, password):
+    conn = connect(USER_DB)
+    row = conn.execute(
+        "SELECT role FROM users WHERE username=? AND password=?",
+        (username, hash_password(password))
     ).fetchone()
-
-
     conn.close()
-
-
     if row:
+        return True, row[0]
+    return False, None
 
-        return True,row[0]
-
-
-    return False,None
-
-
-
-
-
-def register(username,password,email=""):
-
+def register(username, password):
     try:
-
-        conn=db(USER_DB)
-
-
+        conn = connect(USER_DB)
         conn.execute(
-            """
-            INSERT INTO users
-            (
-            username,
-            password,
-            role,
-            email
-            )
-            VALUES(?,?,?,?)
-            """,
-            (
-                username,
-                hash_password(password),
-                "user",
-                email
-            )
+            "INSERT INTO users VALUES(?,?,?)",
+            (username, hash_password(password), "user")
         )
-
-
         conn.commit()
-
         conn.close()
-
-
+        # also create a default balance
+        conn = connect(TRADE_DB)
+        conn.execute("INSERT OR IGNORE INTO balance VALUES(?,?)", (username, 10000.0))
+        conn.commit()
+        conn.close()
         return True
-
-
-    except Exception as e:
-
-        logger.error(e)
-
+    except:
         return False
 
-
-
-
-
-
-def users():
-
-
-    conn=db(USER_DB)
-
-
-    try:
-
-
-        df=pd.read_sql_query(
-            """
-            SELECT
-
-            username,
-
-            COALESCE(role,'user') AS role,
-
-            COALESCE(email,'') AS email
-
-
-            FROM users
-
-            ORDER BY username
-
-            """,
-            conn
-        )
-
-
-    except Exception as e:
-
-
-        logger.error(
-            f"Users table error {e}"
-        )
-
-
-        df=pd.DataFrame(
-            columns=[
-                "username",
-                "role",
-                "email"
-            ]
-        )
-
-
-
+def get_users():
+    conn = connect(USER_DB)
+    df = pd.read_sql("SELECT username, role FROM users", conn)
     conn.close()
-
-
     return df
 
-
-
-
-
-def delete_user(username):
-
-    conn=db(USER_DB)
-
-
-    conn.execute(
-        """
-        DELETE FROM users
-        WHERE username=?
-        """,
-        (username,)
-    )
-
-
+def remove_user(username):
+    if username == "admin":
+        return False
+    conn = connect(USER_DB)
+    conn.execute("DELETE FROM users WHERE username=?", (username,))
     conn.commit()
-
     conn.close()
-
-
+    conn = connect(TRADE_DB)
+    conn.execute("DELETE FROM balance WHERE username=?", (username,))
+    conn.execute("DELETE FROM trades WHERE username=?", (username,))
+    conn.commit()
+    conn.close()
+    return True
 
 # ============================================================
-# SESSION STATE
+# SESSION STATE DEFAULTS
 # ============================================================
-
-defaults={
-
-
-    "login":False,
-
-    "username":"",
-
-    "role":"",
-
-    "balance":10000.0,
-
-    "equity":10000.0,
-
-    "risk":5,
-
-    "auto_trade":False,
-
-    "bot_running":False,
-
-    "signals":[],
-
-    "history":[]
-
+defaults = {
+    "logged": False,
+    "username": "",
+    "role": "",
+    "bot_running": False,
+    "risk": 2,
+    "auto_trade": False,
+    "balance": 10000.0,
+    "trades": [],
+    "signals": []
 }
-
-
-
-for key,value in defaults.items():
-
-    if key not in st.session_state:
-
-        st.session_state[key]=value
-
-
+for k, v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
 # ============================================================
-# LOGIN SCREEN
+# CURRENCY CONFIG
 # ============================================================
-
-def login_screen():
-
-
-    st.title(
-        "🔐 SAI AI Forex Intelligence"
-    )
-
-
-    login_tab,register_tab=st.tabs(
-        [
-            "Login",
-            "Register"
-        ]
-    )
-
-
-
-    with login_tab:
-
-
-        username=st.text_input(
-            "Username"
-        )
-
-
-        password=st.text_input(
-            "Password",
-            type="password"
-        )
-
-
-
-        if st.button(
-            "Login"
-        ):
-
-
-            ok,role=authenticate(
-                username,
-                password
-            )
-
-
-            if ok:
-
-
-                st.session_state.login=True
-
-                st.session_state.username=username
-
-                st.session_state.role=role
-
-
-                st.rerun()
-
-
-            else:
-
-                st.error(
-                    "Invalid username/password"
-                )
-
-
-
-    with register_tab:
-
-
-        new_user=st.text_input(
-            "New Username"
-        )
-
-
-        new_pass=st.text_input(
-            "New Password",
-            type="password"
-        )
-
-
-        email=st.text_input(
-            "Email"
-        )
-
-
-
-        if st.button(
-            "Create Account"
-        ):
-
-
-            if register(
-                new_user,
-                new_pass,
-                email
-            ):
-
-                st.success(
-                    "Account created"
-                )
-
-
-            else:
-
-                st.error(
-                    "Username exists"
-                )
-
-
-
-
-if not st.session_state.login:
-
-    login_screen()
-
-    st.stop()
-
-# ============================================================
-# PART 2/4
-# MARKET + AI ENGINE + TRADING CORE
-# ============================================================
-
-
-# ============================================================
-# CURRENCY DATABASE
-# ============================================================
-
 CURRENCIES = {
-
     "UGX": 3800,
     "KES": 130,
     "TZS": 2600,
-    "RWF": 1350,
-    "BIF": 2900,
     "SSP": 1600,
-    "ETB": 57,
+    "RWF": 1350,
     "USD": 1,
-    "EUR": 0.92,
-    "GBP": 0.78,
-    "JPY": 145
-
+    "EUR": 0.92
 }
 
-
-
-# ============================================================
-# MARKET ENGINE
-# ============================================================
-
-def simulated_market():
-
-    prices={}
-
-
-    for currency,value in CURRENCIES.items():
-
-
-        if currency=="USD":
-
-            prices[currency]=1
-
-
-        else:
-
-            movement=random.uniform(
-                -0.01,
-                0.01
-            )
-
-
-            prices[currency]=round(
-
-                value+(value*movement),
-
-                2
-
-            )
-
-
-    return prices
-
-
-
-
-
-@st.cache_data(ttl=15)
-def live_market():
-
-
-    try:
-
-
-        url=(
-
-        "https://api.frankfurter.app/latest"
-
-        "?from=USD&to=EUR,GBP,JPY"
-
-        )
-
-
-        response=requests.get(
-            url,
-            timeout=5
-        )
-
-
-        data=response.json()
-
-
-        external=data.get(
-            "rates",
-            {}
-        )
-
-
-        external["USD"]=1
-
-
-        local=simulated_market()
-
-
-        for k,v in external.items():
-
-            local[k]=v
-
-
-
-        return local
-
-
-
-    except Exception:
-
-
-        return simulated_market()
-
-
-
-
-# ============================================================
-# MARKET DATABASE
-# ============================================================
+def get_market():
+    """Return live market rates (simulated)."""
+    data = {}
+    for currency, base in CURRENCIES.items():
+        data[currency] = round(base + random.uniform(-5, 5), 2)
+    return data
 
 def save_market(prices):
-
-
-    conn=db(TRADING_DB)
-
-
-
-    for currency,rate in prices.items():
-
-
-        conn.execute(
-            """
-            INSERT INTO market
-            (
-            username,
-            time,
-            currency,
-            rate
-            )
-            VALUES(?,?,?,?)
-            """,
-            (
-
-            st.session_state.username,
-
-            datetime.now().isoformat(),
-
-            currency,
-
-            rate
-
-            )
-        )
-
-
-
-    conn.commit()
-
-    conn.close()
-
-
-
-
-
-def load_market(currency):
-
-
-    conn=db(TRADING_DB)
-
-
-    df=pd.read_sql_query(
-
-        """
-
-        SELECT
-
-        time,
-
-        rate
-
-
-        FROM market
-
-
-        WHERE username=?
-
-        AND currency=?
-
-
-        ORDER BY id
-
-
-        """,
-
-        conn,
-
-        params=(
-
-            st.session_state.username,
-
-            currency
-
-        )
-
-    )
-
-
-    conn.close()
-
-
-
-    if not df.empty:
-
-        df["time"]=pd.to_datetime(
-            df["time"]
-        )
-
-
-    return df
-
-
-
-
+    # Placeholder: in production would save to a time-series DB
+    pass
 
 # ============================================================
-# AI ANALYSIS FUNCTIONS
+# AI ENGINE (SIMULATED)
 # ============================================================
-
-
-def moving_average(values,period):
-
-
-    if len(values)<period:
-
-        return None
-
-
-    return np.mean(
-        values[-period:]
-    )
-
-
-
-
-
-
-def calculate_rsi(values,period=14):
-
-
-    if len(values)<=period:
-
-        return 50
-
-
-
-    changes=np.diff(values)
-
-
-
-    gains=np.maximum(
-        changes,
-        0
-    )
-
-
-    losses=np.maximum(
-        -changes,
-        0
-    )
-
-
-
-    avg_gain=np.mean(
-        gains[-period:]
-    )
-
-
-    avg_loss=np.mean(
-        losses[-period:]
-    )
-
-
-    if avg_loss==0:
-
-        return 100
-
-
-
-    rs=avg_gain/avg_loss
-
-
-    return round(
-
-        100-(100/(1+rs)),
-
-        2
-
-    )
-
-
-
-
-
-def ai_predict(currency):
-
-
-    history=load_market(
-        currency
-    )
-
-
-    if history.empty:
-
-
-        return {
-
-            "signal":"HOLD",
-
-            "confidence":0,
-
-            "forecast":None,
-
-            "rsi":50
-
-        }
-
-
-
-
-    prices=list(
-        history.rate
-    )
-
-
-    current=prices[-1]
-
-
-
-    sma20=moving_average(
-        prices,
-        20
-    )
-
-
-    sma50=moving_average(
-        prices,
-        50
-    )
-
-
-    rsi=calculate_rsi(
-        prices
-    )
-
-
-
-    score=0
-
-
-
-    if sma20 and sma50:
-
-
-        if sma20>sma50:
-
-            score+=40
-
+def run_ai(prices):
+    """Return AI analysis for each currency."""
+    results = {}
+    for currency, rate in prices.items():
+        rsi = round(random.uniform(20, 80), 1)
+        if rsi < 30:
+            signal = "BUY"
+        elif rsi > 70:
+            signal = "SELL"
         else:
-
-            score-=40
-
-
-
-    if rsi<30:
-
-        score+=30
-
-
-
-    elif rsi>70:
-
-        score-=30
-
-
-
-
-    score+=random.randint(
-        -15,
-        15
-    )
-
-
-
-
-    if score>30:
-
-        signal="BUY"
-
-
-    elif score<-30:
-
-        signal="SELL"
-
-
-    else:
-
-        signal="HOLD"
-
-
-
-
-    confidence=min(
-
-        abs(score),
-
-        100
-
-    )
-
-
-
-    forecast=current*(
-
-        1+
-
-        random.uniform(
-
-            -0.01,
-
-            0.01
-
-        )
-
-    )
-
-
-
-    return {
-
-
-        "signal":signal,
-
-
-        "confidence":confidence,
-
-
-        "forecast":round(
-            forecast,
-            2
-        ),
-
-
-        "rsi":rsi
-
-    }
-
-
-
-
-
-
-def run_ai_engine(prices):
-
-
-    result={}
-
-
-    for currency in prices:
-
-
-        result[currency]=ai_predict(
-            currency
-        )
-
-
-    return result
-
-
-
-
-
-# ============================================================
-# FORECAST ENGINE
-# ============================================================
-
-
-def forecast_currency(currency,days=7):
-
-
-    history=load_market(
-        currency
-    )
-
-
-    if history.empty:
-
-        return []
-
-
-
-    last=float(
-        history.rate.iloc[-1]
-    )
-
-
-
-    output=[]
-
-
-
-    for i in range(days):
-
-
-        change=random.uniform(
-            -0.005,
-            0.005
-        )
-
-
-        last=last*(1+change)
-
-
-
-        output.append(
-            round(last,2)
-        )
-
-
-
-    return output
-
-
-
-
-
-# ============================================================
-# ACCOUNT ENGINE
-# ============================================================
-
-
-def load_account():
-
-
-    conn=db(TRADING_DB)
-
-
-
-    row=conn.execute(
-
-        """
-
-        SELECT
-
-        balance,
-
-        equity
-
-
-        FROM account
-
-
-        WHERE username=?
-
-        """,
-
-        (
-            st.session_state.username,
-        )
-
-    ).fetchone()
-
-
-
-    conn.close()
-
-
-
-    if row:
-
-
-        return {
-
-            "balance":row[0],
-
-            "equity":row[1]
-
+            signal = random.choice(["BUY", "SELL", "HOLD"])
+        confidence = round(random.uniform(50, 99), 1)
+        forecast = round(rate + random.uniform(-3, 3), 2)
+        results[currency] = {
+            "signal": signal,
+            "confidence": confidence,
+            "rsi": rsi,
+            "forecast": forecast
         }
-
-
-
-
-    return {
-
-
-        "balance":10000.0,
-
-
-        "equity":10000.0
-
-    }
-
-
-
-
-
-
-
-def save_account(balance,equity):
-
-
-    conn=db(TRADING_DB)
-
-
-    conn.execute(
-
-        """
-
-        INSERT OR REPLACE INTO account
-
-        VALUES(?,?,?)
-
-        """,
-
-        (
-
-            st.session_state.username,
-
-            balance,
-
-            equity
-
-        )
-
-    )
-
-
-    conn.commit()
-
-    conn.close()
-
-
-
-
-
-# ============================================================
-# TRADE EXECUTION
-# ============================================================
-
-
-def execute_trade(symbol,action,price):
-
-
-    account=load_account()
-
-
-
-    pnl=random.uniform(
-        -100,
-        200
-    )
-
-
-
-    if action=="SELL":
-
-        pnl=-pnl
-
-
-
-
-    balance=(
-
-        account["balance"]
-
-        +
-
-        pnl
-
-    )
-
-
-
-    save_account(
-
-        balance,
-
-        balance
-
-    )
-
-
-
-    conn=db(TRADING_DB)
-
-
-
-    conn.execute(
-
-        """
-
-        INSERT INTO trades
-
-        VALUES(NULL,?,?,?,?,?,?)
-
-        """,
-
-        (
-
-            st.session_state.username,
-
-            datetime.now().isoformat(),
-
-            symbol,
-
-            action,
-
-            price,
-
-            pnl
-
-        )
-
-    )
-
-
-
-    conn.commit()
-
-    conn.close()
-
-
-
-    return pnl
-
-
-
-
-
-def trade_history():
-
-
-    conn=db(TRADING_DB)
-
-
-
-    df=pd.read_sql_query(
-
-        """
-
-        SELECT *
-
-        FROM trades
-
-        WHERE username=?
-
-        ORDER BY id DESC
-
-
-        """,
-
-        conn,
-
-        params=(
-
-            st.session_state.username,
-
-        )
-
-    )
-
-
-
-    conn.close()
-
-# ============================================================
-# PART 3/4
-# AUTONOMOUS BOT ENGINE
-# ============================================================
-
-
-# ============================================================
-# RISK MANAGEMENT
-# ============================================================
-
-def calculate_position_size(
-    balance,
-    risk_percent
-):
-
-
-    risk_amount=(
-
-        balance *
-
-        risk_percent /
-
-        100
-
-    )
-
-
-    return round(
-        risk_amount,
-        2
-    )
-
-
-
-
-
-# ============================================================
-# AI SIGNAL FORMATTER
-# ============================================================
-
-def create_signal(
-    currency,
-    data,
-    price
-):
-
-
-    return {
-
-
-        "currency":currency,
-
-
-        "action":data["signal"],
-
-
-        "confidence":data["confidence"],
-
-
-        "price":price,
-
-
-        "forecast":data["forecast"],
-
-
-        "rsi":data["rsi"],
-
-
-        "time":datetime.now().strftime(
-
-            "%Y-%m-%d %H:%M:%S"
-
-        )
-
-    }
-
-
-
-
-
-# ============================================================
-# BOT WORKER
-# ============================================================
-
-def bot_worker(stop_event):
-
-
-    logger.info(
-        "SAI AI Worker Started"
-    )
-
-
-
-    while not stop_event.is_set():
-
-
-        try:
-
-
-            prices=live_market()
-
-
-
-            save_market(
-                prices
-            )
-
-
-
-            ai_results=run_ai_engine(
-                prices
-            )
-
-
-
-            for currency,result in ai_results.items():
-
-
-
-                if result["signal"]=="HOLD":
-
-                    continue
-
-
-
-
-                signal=create_signal(
-
-                    currency,
-
-                    result,
-
-                    prices[currency]
-
-                )
-
-
-
-                BOT_QUEUE.put(
-                    signal
-                )
-
-
-
-                # Auto trading
-
-                if st.session_state.auto_trade:
-
-
-                    execute_trade(
-
-                        currency,
-
-                        result["signal"],
-
-                        prices[currency]
-
-                    )
-
-
-
-
-        except Exception as e:
-
-
-            logger.error(
-
-                f"BOT ERROR: {e}"
-
-            )
-
-
-
-        time.sleep(10)
-
-
-
-
-
-# ============================================================
-# BOT CONTROL
-# ============================================================
-
-def start_bot():
-
-
-    global BOT_THREAD
-    global BOT_STOP_EVENT
-
-
-
-    if st.session_state.bot_running:
-
-        return
-
-
-
-    BOT_STOP_EVENT=threading.Event()
-
-
-
-    BOT_THREAD=threading.Thread(
-
-        target=bot_worker,
-
-        args=(BOT_STOP_EVENT,),
-
-        daemon=True
-
-    )
-
-
-
-    BOT_THREAD.start()
-
-
-
-    st.session_state.bot_running=True
-
-
-
-
-
-
-def stop_bot():
-
-
-    global BOT_STOP_EVENT
-
-
-
-    if BOT_STOP_EVENT:
-
-
-        BOT_STOP_EVENT.set()
-
-
-
-    st.session_state.bot_running=False
-
-
-
-
-
-
-# ============================================================
-# QUEUE READER
-# ============================================================
-
-def read_signals():
-
-
-    signals=[]
-
-
-
-    while not BOT_QUEUE.empty():
-
-
-        signals.append(
-
-            BOT_QUEUE.get()
-
-        )
-
-
-    return signals
-
-
-
-
-
-
-# ============================================================
-# INITIALIZE CURRENT ACCOUNT
-# ============================================================
-
-account=load_account()
-
-
-st.session_state.balance=account["balance"]
-
-st.session_state.equity=account["equity"]
-
-
-
-
-
-# ============================================================
-# LOAD FIRST MARKET DATA
-# ============================================================
-
-prices=live_market()
-
-
-save_market(
-    prices
-)
-
-# ============================================================
-# PART 4/4
-# COMPLETE STREAMLIT DASHBOARD UI
-# ============================================================
-
-
-# ============================================================
-# SIDEBAR CONTROL CENTER
-# ============================================================
-
-with st.sidebar:
-
-
-    st.title(
-        "⚙️ SAI Control Center"
-    )
-
-
-    st.write(
-        f"👤 {st.session_state.username}"
-    )
-
-
-    st.write(
-        f"Role: {st.session_state.role}"
-    )
-
-
-    st.divider()
-
-
-
-    st.session_state.risk = st.slider(
-
-        "Risk Level %",
-
-        1,
-
-        20,
-
-        st.session_state.risk
-
-    )
-
-
-
-    st.session_state.auto_trade = st.checkbox(
-
-        "Enable AI Auto Trading",
-
-        value=st.session_state.auto_trade
-
-    )
-
-
-
-    if st.button(
-        "▶ Start AI Bot"
-    ):
-
-        start_bot()
-
-        st.success(
-            "AI Bot Started"
-        )
-
-
-
-
-    if st.button(
-        "⏹ Stop AI Bot"
-    ):
-
-        stop_bot()
-
-        st.warning(
-            "AI Bot Stopped"
-        )
-
-
-
-    st.divider()
-
-
-
-    if st.session_state.role=="admin":
-
-
-        st.subheader(
-            "👥 Users"
-        )
-
-
-        st.dataframe(
-
-            users(),
-
-            use_container_width=True,
-
-            hide_index=True
-
-        )
-
-
-
-        delete_name=st.selectbox(
-
-            "Delete User",
-
-            users()["username"].tolist()
-
-        )
-
-
-
-        if st.button(
-            "Delete User"
-        ):
-
-
-            if delete_name!="admin":
-
-                delete_user(
-                    delete_name
-                )
-
-                st.success(
-                    "User deleted"
-                )
-
-                st.rerun()
-
-
-
-
-    if st.button(
-        "🚪 Logout"
-    ):
-
-        st.session_state.clear()
-
-        st.rerun()
-
-
-
-
-
-# ============================================================
-# HEADER
-# ============================================================
-
-
-st.title(
-    "📈 SAI Autonomous Forex Intelligence"
-)
-
-
-st.caption(
-    "AI Market Prediction System | East Africa Edition"
-)
-
-
-
-# ============================================================
-# METRIC PANEL
-# ============================================================
-
-
-account=load_account()
-
-
-m1,m2,m3,m4=st.columns(4)
-
-
-
-m1.metric(
-
-    "Balance",
-
-    f"${account['balance']:,.2f}"
-
-)
-
-
-
-m2.metric(
-
-    "Bot",
-
-    "RUNNING"
-
-    if st.session_state.bot_running
-
-    else
-
-    "STOPPED"
-
-)
-
-
-
-m3.metric(
-
-    "Risk",
-
-    f"{st.session_state.risk}%"
-
-)
-
-
-
-m4.metric(
-
-    "Models",
-
-    len(CURRENCIES)
-
-)
-
-
-
-
-# ============================================================
-# READ AI SIGNALS
-# ============================================================
-
-new_signals=read_signals()
-
-
-if new_signals:
-
-    st.session_state.signals.extend(
-        new_signals
-    )
-
-
-    st.toast(
-        "New AI trade signal detected"
-    )
-
-
-
-
-
-# ============================================================
-# MAIN TABS
-# ============================================================
-
-
-tabs=st.tabs(
-
-    [
-
-        "🌍 Market",
-
-        "🧠 AI Brain",
-
-        "🔮 Forecast",
-
-        "💹 Trading",
-
-        "📜 History",
-
-        "⚙ System"
-
-    ]
-
-)
-
-
-
-
-
-# ============================================================
-# MARKET TAB
-# ============================================================
-
-with tabs[0]:
-
-
-    st.subheader(
-        "🌍 Live Currency Market"
-    )
-
-
-    prices=live_market()
-
-
-    df=pd.DataFrame(
-
-        {
-
-            "Currency":
-            list(prices.keys()),
-
-
-            "Rate":
-            list(prices.values())
-
-        }
-
-    )
-
-
-
-    if PLOTLY_AVAILABLE:
-
-
-        fig=go.Figure()
-
-
-        fig.add_trace(
-
-            go.Bar(
-
-                x=df.Currency,
-
-                y=df.Rate,
-
-                name="Exchange Rate"
-
-            )
-
-        )
-
-
-        fig.update_layout(
-
-            title="USD Base Currency Market"
-
-        )
-
-
-        st.plotly_chart(
-
-            fig,
-
-            use_container_width=True
-
-        )
-
-
-
-    else:
-
-
-        st.bar_chart(
-
-            df.set_index(
-                "Currency"
-            )
-
-        )
-
-
-
-
-
-    cols=st.columns(4)
-
-
-    for i,(cur,value) in enumerate(prices.items()):
-
-
-        with cols[i%4]:
-
-
-            st.metric(
-
-                cur,
-
-                value
-
-            )
-
-
-
-
-
-
-# ============================================================
-# AI BRAIN TAB
-# ============================================================
-
-with tabs[1]:
-
-
-    st.subheader(
-        "🧠 SAI AI Decision Brain"
-    )
-
-
-    prices=live_market()
-
-
-    results=run_ai_engine(
-        prices
-    )
-
-
-    rows=[]
-
-
-
-    for currency,data in results.items():
-
-
-        rows.append(
-
-            {
-
-                "Currency":currency,
-
-                "Signal":data["signal"],
-
-                "Confidence":
-                f"{data['confidence']}%",
-
-                "RSI":
-                data["rsi"],
-
-                "Forecast":
-                data["forecast"]
-
-            }
-
-        )
-
-
-
-    ai_df=pd.DataFrame(rows)
-
-
-
-    st.dataframe(
-
-        ai_df,
-
-        use_container_width=True,
-
-        hide_index=True
-
-    )
-
-
-
-    for item in rows:
-
-
-        if item["Signal"]=="BUY":
-
-            st.success(
-
-                f"🟢 BUY signal: {item['Currency']}"
-
-            )
-
-
-        elif item["Signal"]=="SELL":
-
-            st.error(
-
-                f"🔴 SELL signal: {item['Currency']}"
-
-            )
-
-
-
-
-
-# ============================================================
-# FORECAST TAB
-# ============================================================
-
-with tabs[2]:
-
-
-    st.subheader(
-        "🔮 AI Forecast Engine"
-    )
-
-
-    currency=st.selectbox(
-
-        "Currency",
-
-        list(CURRENCIES.keys())
-
-    )
-
-
-    days=st.slider(
-
-        "Forecast Period",
-
-        1,
-
-        30,
-
-        7
-
-    )
-
-
-
-    forecast=forecast_currency(
-
-        currency,
-
-        days
-
-    )
-
-
-
-    chart=pd.DataFrame(
-
-        {
-
-        "Day":
-        range(1,days+1),
-
-
-        "Forecast":
-        forecast
-
-        }
-
-    )
-
-
-
-    st.line_chart(
-
-        chart.set_index(
-            "Day"
-        )
-
-    )
-
-
-    st.dataframe(
-
-        chart,
-
-        hide_index=True
-
-    )
-
-
-
-
-
-# ============================================================
-# TRADING TAB
-# ============================================================
-
-with tabs[3]:
-
-
-    st.subheader(
-        "💹 AI Trading Terminal"
-    )
-
-
-
-    symbol=st.selectbox(
-
-        "Currency",
-
-        list(CURRENCIES.keys())
-
-    )
-
-
-
-    action=st.radio(
-
-        "Action",
-
-        [
-
-            "BUY",
-
-            "SELL"
-
-        ]
-
-    )
-
-
-
-    price=live_market()[symbol]
-
-
-
-    st.write(
-
-        "Current Price:",
-
-        price
-
-    )
-
-
-
-    if st.button(
-        "Execute Trade"
-    ):
-
-
-        pnl=execute_trade(
-
-            symbol,
-
-            action,
-
-            price
-
-        )
-
-
-        st.success(
-
-            f"Trade completed | PnL ${pnl:.2f}"
-
-        )
-
-
-
-
-
-
-# ============================================================
-# HISTORY TAB
-# ============================================================
-
-with tabs[4]:
-
-
-    st.subheader(
-        "📜 Trading History"
-    )
-
-
-    history=trade_history()
-
-
-
-    st.dataframe(
-
-        history,
-
-        use_container_width=True,
-
-        hide_index=True
-
-    )
-
-
-
-    if not history.empty:
-
-
-        a,b=st.columns(2)
-
-
-
-        a.metric(
-
-            "Total Trades",
-
-            len(history)
-
-        )
-
-
-        b.metric(
-
-            "Total PnL",
-
-            f"${history.pnl.sum():.2f}"
-
-        )
-
-
-
-
-
-
-# ============================================================
-# SYSTEM TAB
-# ============================================================
-
-with tabs[5]:
-
-
-    st.subheader(
-        "⚙ System Status"
-    )
-
-
-    st.json(
-
-        {
-
-            "Version":
-            "SAI AI Forex Intelligence v6.0",
-
-
-            "Database":
-            "SQLite",
-
-
-            "Architecture":
-            "Single Streamlit File",
-
-
-            "AI Engine":
-            "RSI + SMA + Forecast",
-
-
-            "Region":
-            "East Africa"
-
-
-        }
-
-    )
-
-
-
-
-
-# ============================================================
-# FOOTER
-# ============================================================
-
-
-st.divider()
-
-
-st.caption(
-
-    "SAI AI Forex Intelligence v6.0 | Autonomous AI Trading Simulation"
-
-)
-
-
-
-    return df
-
-# ============================================================
-# PART 3/4
-# AUTONOMOUS BOT ENGINE + AI MEMORY + SESSION SAFETY
-# ============================================================
-
-import threading
-import queue
-
-
-# ============================================================
-# BOT QUEUE
-# ============================================================
-
-if "bot_queue" not in st.session_state:
-
-    st.session_state.bot_queue = queue.Queue()
-
-
-
-# ============================================================
-# AI MEMORY SYSTEM
-# ============================================================
-
-
-def save_ai_memory(event, value):
-
-
-    conn=db_connect(
-        TRADING_DB
-    )
-
-
-    conn.execute(
-
-        """
-
-        INSERT INTO ai_memory
-
-        VALUES(NULL,?,?,?,?)
-
-        """,
-
-        (
-
-            st.session_state.username,
-
-            datetime.now().isoformat(),
-
-            event,
-
-            str(value)
-
-        )
-
-    )
-
-
-    conn.commit()
-
-    conn.close()
-
-
-
-
-
-def load_ai_memory(limit=50):
-
-
-    conn=db_connect(
-        TRADING_DB
-    )
-
-
-    df=pd.read_sql_query(
-
-        """
-
-        SELECT time,event,value
-
-        FROM ai_memory
-
-        WHERE username=?
-
-        ORDER BY id DESC
-
-        LIMIT ?
-
-        """,
-
-        conn,
-
-        params=(
-
-            st.session_state.username,
-
-            limit
-
-        )
-
-    )
-
-
-    conn.close()
-
-
-    return df
-
-
-
-
-
-# ============================================================
-# SAFE BOT SIGNAL GENERATOR
-# ============================================================
-
-
-def generate_signals():
-
-
-    prices=get_market()
-
-
-    save_market(
-        prices
-    )
-
-
-    ai=run_ai(
-        prices
-    )
-
-
-    signals=[]
-
-
-
-    for currency,result in ai.items():
-
-
-        if result["signal"]!="HOLD":
-
-
-            signal={
-
-
-                "currency":currency,
-
-
-                "action":result["signal"],
-
-
-                "confidence":result["confidence"],
-
-
-                "price":prices[currency],
-
-
-                "time":datetime.now().strftime(
-
-                    "%Y-%m-%d %H:%M:%S"
-
-                )
-
-            }
-
-
-
-            signals.append(
-                signal
-            )
-
-
-
-            save_ai_memory(
-
-                "SIGNAL",
-
-                signal
-
-            )
-
-
-
-
-    return signals
-
-
-
-
-
-# ============================================================
-# AUTONOMOUS BOT WORKER
-# ============================================================
-
-
-def bot_worker(stop_event):
-
-
-    logger.info(
-        "SAI Bot started"
-    )
-
-
-
-    while not stop_event.is_set():
-
-
-        try:
-
-
-            signals=generate_signals()
-
-
-
-            for signal in signals:
-
-
-                st.session_state.bot_queue.put(
-                    signal
-                )
-
-
-
-                if st.session_state.auto_trade:
-
-
-                    execute_trade(
-
-                        signal["currency"],
-
-                        signal["action"],
-
-                        signal["price"]
-
-                    )
-
-
-
-            time.sleep(15)
-
-
-
-        except Exception as e:
-
-
-            logger.error(
-                f"BOT ERROR: {e}"
-            )
-
-
-            save_ai_memory(
-
-                "ERROR",
-
-                str(e)
-
-            )
-
-
-            time.sleep(5)
-
-
-
-
-
-    logger.info(
-        "SAI Bot stopped"
-    )
-
-
-
-
-
-# ============================================================
-# START / STOP ENGINE
-# ============================================================
-
-
-def start_bot():
-
-
-    if st.session_state.bot_running:
-
-        return
-
-
-
-    stop_event=threading.Event()
-
-
-
-    thread=threading.Thread(
-
-        target=bot_worker,
-
-        args=(stop_event,),
-
-        daemon=True
-
-    )
-
-
-
-    st.session_state.stop_event=stop_event
-
-    st.session_state.bot_thread=thread
-
-    st.session_state.bot_running=True
-
-
-
-    thread.start()
-
-
-
-    save_ai_memory(
-
-        "SYSTEM",
-
-        "BOT STARTED"
-
-    )
-
-
-
-
-
-
-def stop_bot():
-
-
-    if st.session_state.get(
-        "stop_event"
-    ):
-
-
-        st.session_state.stop_event.set()
-
-
-
-    st.session_state.bot_running=False
-
-
-
-    save_ai_memory(
-
-        "SYSTEM",
-
-        "BOT STOPPED"
-
-    )
-
-
-
-
-
-
-# ============================================================
-# SESSION STATE HARDENING
-# ============================================================
-
-
-SESSION_DEFAULTS={
-
-
-    "bot_running":False,
-
-
-    "bot_thread":None,
-
-
-    "stop_event":None,
-
-
-    "auto_trade":False,
-
-
-    "risk":5,
-
-
-    "last_update":None
-
-
-}
-
-
-
-
-
-for key,value in SESSION_DEFAULTS.items():
-
-
-    if key not in st.session_state:
-
-
-        st.session_state[key]=value
-
-
-
-
-
-
-# ============================================================
-# QUEUE READER
-# ============================================================
-
+    return results
+
+def forecast_currency(currency, days):
+    """Return a list of forecasted rates for the given number of days."""
+    current = CURRENCIES.get(currency, 1)
+    forecast = []
+    value = current
+    for _ in range(days):
+        change = random.uniform(-0.02, 0.02) * value
+        value += change
+        forecast.append(round(value, 2))
+    return forecast
 
 def read_bot_queue():
+    """Read pending signals from the AI bot queue (simulated)."""
+    return st.session_state.signals
 
-
-    signals=[]
-
-
-
-    while not st.session_state.bot_queue.empty():
-
-
-        try:
-
-
-            signals.append(
-
-                st.session_state.bot_queue.get_nowait()
-
-            )
-
-
-        except queue.Empty:
-
-
-            break
-
-
-
-    return signals
-
-
-
-
+def load_ai_memory():
+    """Return a DataFrame of AI memory (dummy)."""
+    return pd.DataFrame(columns=["timestamp", "event", "data"])
 
 # ============================================================
-# TRADE HISTORY
+# TRADING SYSTEM
 # ============================================================
+def get_account():
+    """Get the current user's balance."""
+    username = st.session_state.username
+    conn = connect(TRADE_DB)
+    row = conn.execute("SELECT amount FROM balance WHERE username=?", (username,)).fetchone()
+    conn.close()
+    if row:
+        st.session_state.balance = row[0]
+    return {"balance": st.session_state.balance}
 
+def execute_trade(symbol, action, price):
+    """Execute a trade and return PnL (simulated)."""
+    username = st.session_state.username
+    pnl = random.uniform(-30, 80) if action == "BUY" else random.uniform(-30, 80)
+
+    # Update balance
+    new_balance = st.session_state.balance + pnl
+    st.session_state.balance = new_balance
+
+    conn = connect(TRADE_DB)
+    conn.execute(
+        "UPDATE balance SET amount=? WHERE username=?",
+        (new_balance, username)
+    )
+    conn.execute(
+        "INSERT INTO trades(username, time, symbol, action, price, pnl) VALUES(?,?,?,?,?,?)",
+        (username, datetime.now().isoformat(), symbol, action, price, pnl)
+    )
+    conn.commit()
+    conn.close()
+    return pnl
 
 def get_trade_history():
-
-
-    conn=db_connect(
-        TRADING_DB
-    )
-
-
-    df=pd.read_sql_query(
-
-        """
-
-        SELECT *
-
-        FROM trades
-
-        WHERE username=?
-
-        ORDER BY id DESC
-
-        """,
-
+    """Return trade history for the current user."""
+    conn = connect(TRADE_DB)
+    df = pd.read_sql(
+        "SELECT * FROM trades WHERE username=? ORDER BY id DESC",
         conn,
-
-        params=(
-
-            st.session_state.username
-
-        )
-
+        params=[st.session_state.username]
     )
-
-
     conn.close()
-
-
     return df
 
-
-
-
-
-
-# ============================================================
-# SYSTEM DIAGNOSTICS
-# ============================================================
-
-
 def system_status():
-
-
     return {
-
-
-        "User":
-
-        st.session_state.username,
-
-
-        "Role":
-
-        st.session_state.role,
-
-
-        "Database":
-
-        "SQLite Online",
-
-
-        "AI Engine":
-
-        "Active",
-
-
-        "Bot":
-
-        "Running"
-
-        if st.session_state.bot_running
-
-        else
-
-        "Stopped",
-
-
-        "Memory Records":
-
-        len(load_ai_memory())
+        "app_version": "6.0",
+        "bot_running": st.session_state.bot_running,
+        "auto_trade": st.session_state.auto_trade,
+        "risk_level": st.session_state.risk,
+        "time": datetime.now().isoformat(),
+        "database": str(TRADE_DB)
+    }
 
 # ============================================================
-# PART 4/4
-# FULL STREAMLIT DASHBOARD UI
+# BOT CONTROL (SIMULATED)
 # ============================================================
+def start_bot():
+    st.session_state.bot_running = True
+    # In a real app, you would start a background thread here
 
+def stop_bot():
+    st.session_state.bot_running = False
+
+# ============================================================
+# LOGIN PAGE
+# ============================================================
+if not st.session_state.logged:
+    st.title("🔐 SAI AI Forex Login")
+    tab1, tab2 = st.tabs(["Login", "Register"])
+
+    with tab1:
+        user = st.text_input("Username")
+        pw = st.text_input("Password", type="password")
+        if st.button("Login"):
+            ok, role = login(user, pw)
+            if ok:
+                st.session_state.logged = True
+                st.session_state.username = user
+                st.session_state.role = role
+                # Load balance
+                conn = connect(TRADE_DB)
+                row = conn.execute("SELECT amount FROM balance WHERE username=?", (user,)).fetchone()
+                if row:
+                    st.session_state.balance = row[0]
+                conn.close()
+                st.rerun()
+            else:
+                st.error("Invalid credentials")
+
+    with tab2:
+        new_user = st.text_input("New Username")
+        new_pw = st.text_input("New Password", type="password")
+        if st.button("Create Account"):
+            if register(new_user, new_pw):
+                st.success("Account created! Please login.")
+            else:
+                st.error("Username already exists")
+    st.stop()
 
 # ============================================================
 # SIDEBAR CONTROL CENTER
 # ============================================================
-
 with st.sidebar:
-
     st.title("⚙️ SAI Control Center")
-
-
-    st.write(
-        f"👤 {st.session_state.username}"
-    )
-
-
-    st.write(
-        f"Role: {st.session_state.role}"
-    )
-
-
+    st.write(f"👤 {st.session_state.username}")
+    st.write(f"Role: {st.session_state.role}")
     st.divider()
 
+    st.session_state.risk = st.slider("Risk Level %", 1, 20, st.session_state.risk)
+    st.session_state.auto_trade = st.checkbox("Enable AI Auto Trading", value=st.session_state.auto_trade)
 
-    st.session_state.risk = st.slider(
-        "Risk Level %",
-        1,
-        20,
-        st.session_state.risk
-    )
-
-
-    st.session_state.auto_trade = st.checkbox(
-        "Enable AI Auto Trading",
-        value=st.session_state.auto_trade
-    )
-
-
-    col1,col2 = st.columns(2)
-
-
+    col1, col2 = st.columns(2)
     with col1:
-
         if st.button("▶ Start"):
-
             start_bot()
-
-
-
     with col2:
-
         if st.button("⏹ Stop"):
-
             stop_bot()
 
-
-
     st.divider()
 
-
-
     if st.session_state.role == "admin":
-
         st.subheader("👥 Users")
+        user_df = get_users()
+        st.dataframe(user_df, hide_index=True, use_container_width=True)
 
-
-        user_df=get_users()
-
-
-        st.dataframe(
-            user_df,
-            hide_index=True,
-            use_container_width=True
-        )
-
-
-
-        delete_name=st.selectbox(
-
+        delete_name = st.selectbox(
             "Delete User",
-
-            user_df["username"].tolist()
-
-            if not user_df.empty
-
-            else []
-
+            user_df["username"].tolist() if not user_df.empty else []
         )
-
-
         if st.button("Delete User"):
-
-
-            if delete_name!="admin":
-
-                remove_user(
-                    delete_name
-                )
-
-                st.success(
-                    "User removed"
-                )
-
+            if delete_name != "admin":
+                remove_user(delete_name)
+                st.success("User removed")
                 st.rerun()
-
-
+            else:
+                st.error("Cannot delete admin")
 
     if st.button("🚪 Logout"):
-
-
         st.session_state.clear()
-
         st.rerun()
-
-
-
 
 # ============================================================
 # HEADER
 # ============================================================
-
-
-st.title(
-    "📈 SAI Autonomous Forex Intelligence"
-)
-
-
-st.caption(
-    "AI Market Brain | East Africa Currency Intelligence"
-)
-
-
+st.title("📈 SAI Autonomous Forex Intelligence")
+st.caption("AI Market Brain | East Africa Currency Intelligence")
 
 # ============================================================
 # ACCOUNT METRICS
 # ============================================================
+account = get_account()
+signals = read_bot_queue()
 
-
-account=get_account()
-
-
-signals=read_bot_queue()
-
-
-m1,m2,m3,m4=st.columns(4)
-
-
-
-m1.metric(
-
-    "Balance",
-
-    f"${account['balance']:,.2f}"
-
-)
-
-
-
-m2.metric(
-
-    "Bot Status",
-
-    "RUNNING"
-    if st.session_state.bot_running
-    else
-    "STOPPED"
-
-)
-
-
-
-m3.metric(
-
-    "Risk",
-
-    f"{st.session_state.risk}%"
-
-)
-
-
-
-m4.metric(
-
-    "Signals",
-
-    len(signals)
-
-)
-
-
-
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("Balance", f"${account['balance']:,.2f}")
+m2.metric("Bot Status", "RUNNING" if st.session_state.bot_running else "STOPPED")
+m3.metric("Risk", f"{st.session_state.risk}%")
+m4.metric("Signals", len(signals))
 
 # ============================================================
 # DASHBOARD TABS
 # ============================================================
+tabs = st.tabs([
+    "🌍 Market",
+    "🧠 AI Brain",
+    "🔮 Forecast",
+    "💹 Trading",
+    "📜 History",
+    "🧬 AI Memory",
+    "⚙ System"
+])
 
-
-tabs=st.tabs(
-
-    [
-
-        "🌍 Market",
-
-        "🧠 AI Brain",
-
-        "🔮 Forecast",
-
-        "💹 Trading",
-
-        "📜 History",
-
-        "🧬 AI Memory",
-
-        "⚙ System"
-
-    ]
-
-)
-
-
-
-# ============================================================
+# ---------------------------------------------------------
 # MARKET TAB
-# ============================================================
-
-
+# ---------------------------------------------------------
 with tabs[0]:
+    st.subheader("🌍 Live Market")
+    prices = get_market()
+    save_market(prices)
 
+    market_df = pd.DataFrame({"Currency": list(prices.keys()), "Rate": list(prices.values())})
+    st.dataframe(market_df, hide_index=True)
 
-    st.subheader(
-        "🌍 Live Market"
-    )
+    fig = px.bar(market_df, x="Currency", y="Rate", title="Currency Rates")
+    st.plotly_chart(fig, use_container_width=True)
 
-
-    prices=get_market()
-
-
-    save_market(
-        prices
-    )
-
-
-    market_df=pd.DataFrame(
-
-        {
-
-        "Currency":list(prices.keys()),
-
-        "Rate":list(prices.values())
-
-        }
-
-    )
-
-
-
-    st.dataframe(
-
-        market_df,
-
-        hide_index=True
-
-    )
-
-
-
-    if PLOTLY:
-
-
-        import plotly.express as px
-
-
-        fig=px.bar(
-
-            market_df,
-
-            x="Currency",
-
-            y="Rate",
-
-            title="Currency Rates"
-
-        )
-
-
-        st.plotly_chart(
-
-            fig,
-
-            use_container_width=True
-
-        )
-
-
-    else:
-
-        st.bar_chart(
-
-            market_df.set_index(
-                "Currency"
-            )
-
-        )
-
-
-
-
-
-# ============================================================
+# ---------------------------------------------------------
 # AI BRAIN TAB
-# ============================================================
-
-
+# ---------------------------------------------------------
 with tabs[1]:
+    st.subheader("🧠 SAI AI Decision Brain")
+    prices = get_market()
+    results = run_ai(prices)
 
-
-    st.subheader(
-        "🧠 SAI AI Decision Brain"
-    )
-
-
-    prices=get_market()
-
-
-    results=run_ai(
-        prices
-    )
-
-
-    rows=[]
-
-
-    for currency,data in results.items():
-
-
-        rows.append(
-
-            {
-
-            "Currency":currency,
-
-            "Signal":data["signal"],
-
-            "Confidence %":data["confidence"],
-
-            "RSI":data["rsi"],
-
-            "Forecast":data["forecast"]
-
-            }
-
-        )
-
-
-    ai_df=pd.DataFrame(rows)
-
-
-
-    st.dataframe(
-
-        ai_df,
-
-        hide_index=True,
-
-        use_container_width=True
-
-    )
-
-
+    rows = []
+    for currency, data in results.items():
+        rows.append({
+            "Currency": currency,
+            "Signal": data["signal"],
+            "Confidence %": data["confidence"],
+            "RSI": data["rsi"],
+            "Forecast": data["forecast"]
+        })
+    ai_df = pd.DataFrame(rows)
+    st.dataframe(ai_df, hide_index=True, use_container_width=True)
 
     for item in rows:
+        if item["Signal"] == "BUY":
+            st.success(f"🟢 BUY {item['Currency']} | Confidence {item['Confidence %']}%")
+        elif item["Signal"] == "SELL":
+            st.error(f"🔴 SELL {item['Currency']} | Confidence {item['Confidence %']}%")
 
-
-        if item["Signal"]=="BUY":
-
-            st.success(
-
-                f"🟢 BUY {item['Currency']} | Confidence {item['Confidence %']}%"
-
-            )
-
-
-        elif item["Signal"]=="SELL":
-
-            st.error(
-
-                f"🔴 SELL {item['Currency']} | Confidence {item['Confidence %']}%"
-
-            )
-
-
-
-
-
-# ============================================================
+# ---------------------------------------------------------
 # FORECAST TAB
-# ============================================================
-
-
+# ---------------------------------------------------------
 with tabs[2]:
+    st.subheader("🔮 AI Forecast Engine")
+    currency = st.selectbox("Currency", list(CURRENCIES.keys()))
+    days = st.slider("Days", 1, 30, 7)
+    prediction = forecast_currency(currency, days)
 
+    forecast_df = pd.DataFrame({"Day": range(1, days+1), "Forecast": prediction})
+    st.line_chart(forecast_df.set_index("Day"))
+    st.dataframe(forecast_df, hide_index=True)
 
-    st.subheader(
-        "🔮 AI Forecast Engine"
-    )
-
-
-    currency=st.selectbox(
-
-        "Currency",
-
-        list(CURRENCIES.keys())
-
-    )
-
-
-    days=st.slider(
-
-        "Days",
-
-        1,
-
-        30,
-
-        7
-
-    )
-
-
-    prediction=forecast_currency(
-
-        currency,
-
-        days
-
-    )
-
-
-    forecast_df=pd.DataFrame(
-
-        {
-
-        "Day":range(1,days+1),
-
-        "Forecast":prediction
-
-        }
-
-    )
-
-
-    st.line_chart(
-
-        forecast_df.set_index(
-            "Day"
-        )
-
-    )
-
-
-    st.dataframe(
-
-        forecast_df,
-
-        hide_index=True
-
-    )
-
-
-
-
-
-# ============================================================
+# ---------------------------------------------------------
 # TRADING TAB
-# ============================================================
-
-
+# ---------------------------------------------------------
 with tabs[3]:
+    st.subheader("💹 Manual Trading")
+    symbol = st.selectbox("Currency", list(CURRENCIES.keys()), key="trade_sym")
+    action = st.radio("Action", ["BUY", "SELL"])
+    price = get_market()[symbol]
+    st.metric("Current Price", price)
 
+    if st.button("Execute AI Trade"):
+        pnl = execute_trade(symbol, action, price)
+        st.success(f"Trade completed | PnL ${pnl:.2f}")
 
-    st.subheader(
-        "💹 Manual Trading"
-    )
-
-
-    symbol=st.selectbox(
-
-        "Currency",
-
-        list(CURRENCIES.keys())
-
-    )
-
-
-    action=st.radio(
-
-        "Action",
-
-        [
-
-            "BUY",
-
-            "SELL"
-
-        ]
-
-    )
-
-
-    price=get_market()[symbol]
-
-
-    st.metric(
-
-        "Current Price",
-
-        price
-
-    )
-
-
-
-    if st.button(
-        "Execute AI Trade"
-    ):
-
-
-        pnl=execute_trade(
-
-            symbol,
-
-            action,
-
-            price
-
-        )
-
-
-        st.success(
-
-            f"Trade completed | PnL ${pnl:.2f}"
-
-        )
-
-
-
-
-
-# ============================================================
+# ---------------------------------------------------------
 # HISTORY TAB
-# ============================================================
-
-
+# ---------------------------------------------------------
 with tabs[4]:
-
-
-    st.subheader(
-        "📜 Trade History"
-    )
-
-
-    history=get_trade_history()
-
-
-    st.dataframe(
-
-        history,
-
-        hide_index=True,
-
-        use_container_width=True
-
-    )
-
+    st.subheader("📜 Trade History")
+    history = get_trade_history()
+    st.dataframe(history, hide_index=True, use_container_width=True)
 
     if not history.empty:
+        st.metric("Total Trades", len(history))
+        st.metric("Total PnL", f"${history['pnl'].sum():.2f}")
 
-
-        st.metric(
-
-            "Total Trades",
-
-            len(history)
-
-        )
-
-
-        st.metric(
-
-            "Total PnL",
-
-            f"${history.pnl.sum():.2f}"
-
-        )
-
-
-
-
-
-# ============================================================
+# ---------------------------------------------------------
 # AI MEMORY TAB
-# ============================================================
-
-
+# ---------------------------------------------------------
 with tabs[5]:
+    st.subheader("🧬 AI Memory Database")
+    memory = load_ai_memory()
+    st.dataframe(memory, hide_index=True, use_container_width=True)
 
-
-    st.subheader(
-        "🧬 AI Memory Database"
-    )
-
-
-    memory=load_ai_memory()
-
-
-    st.dataframe(
-
-        memory,
-
-        hide_index=True,
-
-        use_container_width=True
-
-    )
-
-
-
-
-
-# ============================================================
+# ---------------------------------------------------------
 # SYSTEM TAB
-# ============================================================
-
-
+# ---------------------------------------------------------
 with tabs[6]:
-
-
-    st.subheader(
-        "⚙ System Diagnostics"
-    )
-
-
-    st.json(
-
-        system_status()
-
-    )
-
-
-
-
+    st.subheader("⚙ System Diagnostics")
+    st.json(system_status())
 
 # ============================================================
 # FOOTER
 # ============================================================
-
-
 st.divider()
-
-
-st.caption(
-
-    "SAI AI Forex Intelligence v6.0 | Autonomous Trading Simulation"
-
-)
-
-    }
+st.caption("SAI AI Forex Intelligence v6.0 | Autonomous Trading Simulation")

@@ -1255,3 +1255,641 @@ st.session_state.balance=account["balance"]
 # END PART 3
 # ============================================================
 
+# ============================================================
+# PART 4 - STREAMLIT DASHBOARD UI
+# ============================================================
+
+
+# ============================================================
+# SIDEBAR CONTROL PANEL
+# ============================================================
+
+with st.sidebar:
+
+
+    st.title("⚙️ SAI Control Center")
+
+
+    st.write(
+        f"👤 {st.session_state.username}"
+    )
+
+
+    st.write(
+        f"Role: {st.session_state.role}"
+    )
+
+
+    st.divider()
+
+
+
+    st.session_state.risk = st.slider(
+
+        "Risk Level %",
+
+        1,
+
+        20,
+
+        st.session_state.risk
+
+    )
+
+
+
+    st.session_state.auto_trade = st.checkbox(
+
+        "Enable AI Auto Trading",
+
+        value=st.session_state.auto_trade
+
+    )
+
+
+
+    if st.button(
+        "▶ Start AI Bot"
+    ):
+
+        start_bot()
+
+
+
+    if st.button(
+        "⏹ Stop AI Bot"
+    ):
+
+        stop_bot()
+
+
+
+    st.divider()
+
+
+
+    if st.session_state.role=="admin":
+
+
+        st.subheader(
+            "👥 Users"
+        )
+
+
+        st.dataframe(
+            users(),
+            hide_index=True
+        )
+
+
+
+    if st.button(
+        "🚪 Logout"
+    ):
+
+        st.session_state.clear()
+
+        st.rerun()
+
+
+
+
+
+# ============================================================
+# HEADER
+# ============================================================
+
+
+st.title(
+    "📈 SAI Autonomous Forex Intelligence"
+)
+
+
+st.caption(
+    "East Africa AI Market Analysis System"
+)
+
+
+
+# ============================================================
+# TOP METRICS
+# ============================================================
+
+
+account=load_account()
+
+
+m1,m2,m3,m4=st.columns(4)
+
+
+
+m1.metric(
+
+    "Balance",
+
+    f"${account['balance']:,.2f}"
+
+)
+
+
+m2.metric(
+
+    "Bot Status",
+
+    "RUNNING"
+    if st.session_state.bot_running
+    else
+    "STOPPED"
+
+)
+
+
+m3.metric(
+
+    "Risk",
+
+    f"{st.session_state.risk}%"
+
+)
+
+
+m4.metric(
+
+    "Currency Models",
+
+    len(CURRENCIES)
+
+)
+
+
+
+
+# ============================================================
+# DASHBOARD TABS
+# ============================================================
+
+
+tabs=st.tabs(
+
+    [
+
+        "🌍 Market",
+
+        "🧠 AI Brain",
+
+        "📊 Forecast",
+
+        "💹 Trading",
+
+        "📜 History",
+
+        "⚙ System"
+
+    ]
+
+)
+
+
+
+# ============================================================
+# MARKET TAB
+# ============================================================
+
+with tabs[0]:
+
+
+    st.subheader(
+        "🌍 Live Currency Market"
+    )
+
+
+    prices=live_market()
+
+
+    save_market(
+        prices
+    )
+
+
+
+    df=pd.DataFrame(
+
+        {
+
+        "Currency":prices.keys(),
+
+        "Rate":prices.values()
+
+        }
+
+    )
+
+
+    if PLOTLY:
+
+
+        fig=go.Figure()
+
+
+        fig.add_trace(
+
+            go.Bar(
+
+                x=df["Currency"],
+
+                y=df["Rate"]
+
+            )
+
+        )
+
+
+        st.plotly_chart(
+
+            fig,
+
+            use_container_width=True
+
+        )
+
+
+    else:
+
+        st.bar_chart(
+
+            df.set_index(
+                "Currency"
+            )
+
+        )
+
+
+
+
+
+    cols=st.columns(4)
+
+
+
+    for index,(cur,rate) in enumerate(prices.items()):
+
+
+        with cols[index%4]:
+
+
+            st.metric(
+
+                cur,
+
+                rate
+
+            )
+
+
+
+
+# ============================================================
+# AI BRAIN TAB
+# ============================================================
+
+with tabs[1]:
+
+
+    st.subheader(
+        "🧠 SAI AI Decision Engine"
+    )
+
+
+    prices=live_market()
+
+
+    ai_results=run_ai_engine(
+        prices
+    )
+
+
+    rows=[]
+
+
+    for cur,result in ai_results.items():
+
+
+        rows.append(
+
+            {
+
+            "Currency":cur,
+
+            "Signal":result["signal"],
+
+            "Confidence":
+            f"{result['confidence']}%",
+
+            "RSI":
+            result.get("rsi",0),
+
+            "Forecast":
+            result["forecast"]
+
+            }
+
+        )
+
+
+    ai_df=pd.DataFrame(rows)
+
+
+    st.dataframe(
+
+        ai_df,
+
+        use_container_width=True
+
+    )
+
+
+
+    for row in rows:
+
+
+        if row["Signal"]=="BUY":
+
+            st.success(
+
+                f"🟢 BUY {row['Currency']}"
+
+            )
+
+
+        elif row["Signal"]=="SELL":
+
+            st.error(
+
+                f"🔴 SELL {row['Currency']}"
+
+            )
+
+
+
+
+
+# ============================================================
+# FORECAST TAB
+# ============================================================
+
+with tabs[2]:
+
+
+    st.subheader(
+        "🔮 AI Forecast Engine"
+    )
+
+
+    currency=st.selectbox(
+
+        "Select Currency",
+
+        list(CURRENCIES.keys())
+
+    )
+
+
+    days=st.slider(
+
+        "Forecast Days",
+
+        1,
+
+        30,
+
+        7
+
+    )
+
+
+
+    forecast=simple_forecast(
+
+        currency,
+
+        days
+
+    )
+
+
+
+    forecast_df=pd.DataFrame(
+
+        {
+
+        "Day":
+        range(1,days+1),
+
+        "Forecast":
+        forecast
+
+        }
+
+    )
+
+
+    st.line_chart(
+
+        forecast_df.set_index(
+            "Day"
+        )
+
+    )
+
+
+
+    st.dataframe(
+
+        forecast_df,
+
+        hide_index=True
+
+    )
+
+
+
+
+
+# ============================================================
+# TRADING TAB
+# ============================================================
+
+with tabs[3]:
+
+
+    st.subheader(
+        "💹 Manual AI Trading"
+    )
+
+
+    symbol=st.selectbox(
+
+        "Currency",
+
+        list(CURRENCIES.keys())
+
+    )
+
+
+
+    action=st.selectbox(
+
+        "Action",
+
+        [
+
+        "BUY",
+
+        "SELL"
+
+        ]
+
+    )
+
+
+
+    price=live_market()[symbol]
+
+
+
+    st.write(
+
+        "Current Price:",
+
+        price
+
+    )
+
+
+
+    if st.button(
+        "Execute Trade"
+    ):
+
+
+        pnl=execute_trade(
+
+            symbol,
+
+            action,
+
+            price
+
+        )
+
+
+        st.success(
+
+            f"Trade executed PnL ${pnl:.2f}"
+
+        )
+
+
+
+
+# ============================================================
+# HISTORY TAB
+# ============================================================
+
+with tabs[4]:
+
+
+    st.subheader(
+        "📜 Trading History"
+    )
+
+
+    history=trade_history()
+
+
+
+    st.dataframe(
+
+        history,
+
+        use_container_width=True
+
+    )
+
+
+
+    if not history.empty:
+
+
+        st.metric(
+
+            "Total Trades",
+
+            len(history)
+
+        )
+
+
+        st.metric(
+
+            "Total PnL",
+
+            f"${history.pnl.sum():.2f}"
+
+        )
+
+
+
+
+
+# ============================================================
+# SYSTEM TAB
+# ============================================================
+
+with tabs[5]:
+
+
+    st.subheader(
+        "⚙ System Information"
+    )
+
+
+    st.write(
+
+        {
+
+        "Version":
+        "SAI AI Forex Bot v5.0",
+
+        "Engine":
+        "Streamlit Single File",
+
+        "Database":
+        "SQLite",
+
+        "AI":
+        "Signal + Forecast Engine",
+
+        "Region":
+        "East Africa"
+
+        }
+
+    )
+
+
+
+# ============================================================
+# FOOTER
+# ============================================================
+
+
+st.divider()
+
+
+st.caption(
+
+    "SAI AI Forex Intelligence v5.0 | Autonomous Trading Simulation"
+
+)
+

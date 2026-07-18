@@ -3,6 +3,19 @@
 # Merged: PART 4/4 + v3.0 + All 8 Enhancements
 # ============================================================
 
+import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
+
+# Get database URL from environment (Render will set this)
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    # Fallback for local testing (replace with your own if needed)
+    DATABASE_URL = "postgresql://postgres:yourpassword@localhost:5432/postgres"
+
+def connect_db():
+    return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+
 import streamlit as st
 import pandas as pd
 import numpy as np

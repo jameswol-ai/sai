@@ -1,0 +1,31 @@
+class Trade {
+  final int id;
+  final String username;
+  final String time;
+  final String symbol;
+  final String action;
+  final double price;
+  final double pnl;
+
+  Trade({
+    required this.id,
+    required this.username,
+    required this.time,
+    required this.symbol,
+    required this.action,
+    required this.price,
+    required this.pnl,
+  });
+
+  factory Trade.fromMap(Map<String, dynamic> map) {
+    return Trade(
+      id: map['id'],
+      username: map['username'],
+      time: map['time'],
+      symbol: map['symbol'],
+      action: map['action'],
+      price: (map['price'] as num).toDouble(),
+      pnl: (map['pnl'] as num).toDouble(),
+    );
+  }
+}

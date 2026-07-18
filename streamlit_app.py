@@ -1,220 +1,344 @@
 # ============================================================
-# SAI AI Forex Bot v5.0
-# Unified Single File Streamlit Edition
-# Login + Database + AI Trading Core
+# MARKET ENGINE
 # ============================================================
 
-import streamlit as st
-import sqlite3
-import hashlib
-import random
-import threading
-import queue
-import time
-import logging
-import warnings
-import requests
-from pathlib import Path
-from datetime import datetime, timedelta
-from logging.handlers import RotatingFileHandler
+EAST_AFRICA = {
 
-import pandas as pd
-import numpy as np
+    "UGX":3800,
+    "KES":130,
+    "TZS":2600,
+    "RWF":1350,
+    "BIF":2900,
+    "SSP":1600,
+    "ETB":56
 
-try:
-    import plotly.graph_objects as go
-    PLOTLY_AVAILABLE = True
-except Exception:
-    PLOTLY_AVAILABLE = False
+}
 
 
-# ============================================================
-# STREAMLIT CONFIG
-# ============================================================
+GLOBAL = {
 
-st.set_page_config(
-    page_title="SAI AI Forex Intelligence",
-    page_icon="📈",
-    layout="wide"
-)
+    "USD":1,
+    "EUR":0.92,
+    "GBP":0.78,
+    "JPY":145
 
-
-BASE_DIR = Path(__file__).parent
-
-USER_DB = BASE_DIR / "sai_users.db"
-TRADING_DB = BASE_DIR / "sai_trading.db"
+}
 
 
 
-# ============================================================
-# LOGGING
-# ============================================================
+ALL_MARKETS = {
+    **EAST_AFRICA,
+    **GLOBAL
+}
 
-logging.basicConfig(
-    level=logging.INFO,
-    handlers=[
-        RotatingFileHandler(
-            "sai_app.log",
-            maxBytes=5_000_000,
-            backupCount=3
+
+
+def generate_market():
+
+    prices={}
+
+
+    for symbol,value in ALL_MARKETS.items():
+
+        movement=random.uniform(
+            -0.5,
+            0.5
         )
-    ],
-    format="%(asctime)s %(levelname)s %(message)s"
-)
 
-logger = logging.getLogger("SAI")
+
+        prices[symbol]=round(
+            value+movement,
+            4
+        )
+
+
+    return prices
 
 
 
 # ============================================================
-# DATABASE CORE
+# PRICE HISTORY ENGINE
 # ============================================================
 
-def database(path):
 
-    return sqlite3.connect(
-        path,
-        check_same_thread=False
-    )
+def save_price_history(prices):
+
+    user=st.session_state.username
 
 
-
-def password_hash(password):
-
-    return hashlib.sha256(
-        password.encode()
-    ).hexdigest()
+    conn=database(TRADING_DB)
 
 
-
-def initialize_database():
-
-
-    # USERS
-
-    conn = database(USER_DB)
-
-    conn.execute("""
-    CREATE TABLE IF NOT EXISTS users(
-
-        username TEXT PRIMARY KEY,
-        password TEXT,
-        role TEXT,
-        email TEXT
-
-    )
-    """)
-
-
-    count = conn.execute(
-        "SELECT COUNT(*) FROM users"
-    ).fetchone()[0]
-
-
-    if count == 0:
+    for symbol,value in prices.items():
 
         conn.execute(
             """
-            INSERT INTO users
-            VALUES(?,?,?,?)
+            INSERT INTO trades
+            (
+            username,
+            time,
+            symbol,
+            action,
+            price,
+            pnl
+            )
+
+            VALUES(?,?,?,?,?,?)
             """,
             (
-                "admin",
-                password_hash("admin123"),
-                "admin",
-                "admin@sai.ai"
+                user,
+                datetime.now().isoformat(),
+                symbol,
+                "MARKET",
+                value,
+                0
             )
         )
 
 
     conn.commit()
+
     conn.close()
 
 
 
-    # TRADING DATABASE
-
-    conn = database(TRADING_DB)
-
-
-    conn.executescript("""
-
-    CREATE TABLE IF NOT EXISTS trades(
-
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT,
-        time TEXT,
-        symbol TEXT,
-        action TEXT,
-        price REAL,
-        pnl REAL
-
-    );
+# ============================================================
+# AI SIGNAL ENGINE
+# ============================================================
 
 
-    CREATE TABLE IF NOT EXISTS balance(
+def ai_prediction():
 
-        username TEXT PRIMARY KEY,
-        amount REAL
-
-    );
-
-
-    CREATE TABLE IF NOT EXISTS orders(
-
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT,
-        time TEXT,
-        symbol TEXT,
-        units INTEGER,
-        action TEXT,
-        price REAL,
-        status TEXT
-
-    );
+    confidence=random.randint(
+        50,
+        99
+    )
 
 
-    CREATE TABLE IF NOT EXISTS logs(
-
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT,
-        time TEXT,
-        message TEXT
-
-    );
+    score=random.randint(
+        -100,
+        100
+    )
 
 
-    """)
+    if score > 35:
+
+        decision="BUY"
+
+
+    elif score < -35:
+
+        decision="SELL"
+
+
+    else:
+
+        decision="HOLD"
+
+
+
+    return {
+
+        "signal":decision,
+
+        "confidence":confidence,
+
+        "score":score
+
+    }
+
+
+
+
+# ============================================================
+# TECHNICAL INDICATORS
+# ============================================================
+
+
+def calculate_rsi(series,period=14):
+
+
+    delta=series.diff()
+
+
+    gain=delta.clip(
+        lower=0
+    )
+
+
+    loss=-delta.clip(
+        upper=0
+    )
+
+
+    avg_gain=gain.mean()
+
+    avg_loss=loss.mean()
+
+
+    if avg_loss==0:
+
+        return 100
+
+
+    rs=avg_gain/avg_loss
+
+
+    return round(
+        100-(100/(1+rs)),
+        2
+    )
+
+
+
+
+def moving_average(series,period):
+
+    return series.rolling(
+        period
+    ).mean()
+
+
+
+
+# ============================================================
+# FORECAST ENGINE
+# ============================================================
+
+
+def forecast_price(history):
+
+
+    if len(history)<5:
+
+        return None
+
+
+
+    values=np.array(
+        history
+    )
+
+
+    trend=np.polyfit(
+        range(len(values)),
+        values,
+        1
+    )
+
+
+    future=np.polyval(
+        trend,
+        len(values)+1
+    )
+
+
+    return round(
+        float(future),
+        4
+    )
+
+
+
+# ============================================================
+# AI TRADING LOGIC
+# ============================================================
+
+
+def create_trade(symbol,action,price):
+
+
+    pnl=random.uniform(
+        -100,
+        250
+    )
+
+
+    user=st.session_state.username
+
+
+
+    conn=database(TRADING_DB)
+
+
+
+    conn.execute(
+        """
+        INSERT INTO trades
+        (
+        username,
+        time,
+        symbol,
+        action,
+        price,
+        pnl
+        )
+
+        VALUES(?,?,?,?,?,?)
+        """,
+        (
+
+            user,
+
+            datetime.now().isoformat(),
+
+            symbol,
+
+            action,
+
+            price,
+
+            pnl
+
+        )
+    )
+
+
+
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO balance
+        VALUES(?,?)
+        """,
+        (
+
+        user,
+
+        st.session_state.balance+pnl
+
+        )
+    )
 
 
     conn.commit()
+
     conn.close()
 
 
 
-initialize_database()
+    st.session_state.balance += pnl
 
 
 
 # ============================================================
-# USER MANAGEMENT
+# TRADING ACCOUNT
 # ============================================================
 
 
-def authenticate(username,password):
+def load_balance():
 
-    conn = database(USER_DB)
 
-    row = conn.execute(
+    conn=database(TRADING_DB)
+
+
+    row=conn.execute(
         """
-        SELECT role
-        FROM users
+        SELECT amount
+        FROM balance
         WHERE username=?
-        AND password=?
         """,
         (
-            username,
-            password_hash(password)
+            st.session_state.username,
         )
     ).fetchone()
 
@@ -222,256 +346,193 @@ def authenticate(username,password):
     conn.close()
 
 
+
     if row:
 
-        return True,row[0]
+        return row[0]
 
 
-    return False,None
+    return 10000.0
 
 
 
 
-def register(username,password,email=""):
+st.session_state.balance = load_balance()
 
+
+
+# ============================================================
+# BOT AUTONOMOUS LOOP
+# ============================================================
+
+
+def bot_worker():
+
+
+    while not st.session_state.stop_event.is_set():
+
+
+        prices=generate_market()
+
+
+        brain=ai_prediction()
+
+
+
+        if brain["signal"]!="HOLD":
+
+
+            st.session_state.queue.put(
+
+                {
+
+                "symbol":"UGX",
+
+                "action":brain["signal"],
+
+                "price":prices["UGX"],
+
+                "confidence":brain["confidence"]
+
+                }
+
+            )
+
+
+        time.sleep(5)
+
+
+
+
+
+def start_bot():
+
+
+    if st.session_state.bot_running:
+
+        return
+
+
+
+    st.session_state.stop_event=threading.Event()
+
+
+
+    thread=threading.Thread(
+
+        target=bot_worker,
+
+        daemon=True
+
+    )
+
+
+    st.session_state.thread=thread
+
+
+    st.session_state.bot_running=True
+
+
+    thread.start()
+
+
+
+
+
+def stop_bot():
+
+
+    if st.session_state.bot_running:
+
+
+        st.session_state.stop_event.set()
+
+
+        st.session_state.bot_running=False
+
+
+
+# ============================================================
+# LOAD TRADE HISTORY
+# ============================================================
+
+
+def trade_history():
+
+
+    conn=database(TRADING_DB)
+
+
+
+    df=pd.read_sql(
+
+        """
+
+        SELECT *
+
+        FROM trades
+
+        WHERE username=?
+
+        ORDER BY id DESC
+
+        """,
+
+        conn,
+
+        params=[
+
+        st.session_state.username
+
+        ]
+
+    )
+
+
+    conn.close()
+
+
+    return df
+
+
+
+# ============================================================
+# TELEGRAM ALERT SUPPORT
+# ============================================================
+
+
+def send_alert(message):
 
     try:
 
-        conn=database(USER_DB)
-
-
-        conn.execute(
-            """
-            INSERT INTO users
-            VALUES(?,?,?,?)
-            """,
-            (
-                username,
-                password_hash(password),
-                "user",
-                email
-            )
+        token=st.secrets.get(
+            "TELEGRAM_TOKEN"
         )
 
 
-        conn.commit()
-        conn.close()
-
-
-        return True
-
-
-    except Exception:
-
-        return False
-
-
-
-
-def users_list():
-
-    conn=database(USER_DB)
-
-    data=pd.read_sql(
-        """
-        SELECT username,role,email
-        FROM users
-        """,
-        conn
-    )
-
-    conn.close()
-
-    return data
-
-
-
-
-def delete_user(username):
-
-    conn=database(USER_DB)
-
-    conn.execute(
-        "DELETE FROM users WHERE username=?",
-        (username,)
-    )
-
-    conn.commit()
-    conn.close()
-
-
-
-# ============================================================
-# SESSION ENGINE
-# ============================================================
-
-
-SESSION_DEFAULTS={
-
-
-"logged":False,
-
-"username":"",
-
-"role":"",
-
-"balance":10000.0,
-
-"bot_running":False,
-
-"auto_trade":False,
-
-"risk":5,
-
-"history":[],
-
-"signals":[],
-
-"logs":[],
-
-"queue":queue.Queue(),
-
-"thread":None,
-
-"stop_event":None
-
-
-}
-
-
-
-for key,value in SESSION_DEFAULTS.items():
-
-    if key not in st.session_state:
-
-        st.session_state[key]=value
-
-
-
-# ============================================================
-# LOGIN UI
-# ============================================================
-
-
-def login_screen():
-
-
-    st.title(
-        "🔐 SAI AI Forex Intelligence"
-    )
-
-
-    tab1,tab2=st.tabs(
-        [
-            "Login",
-            "Register"
-        ]
-    )
-
-
-    with tab1:
-
-
-        username=st.text_input(
-            "Username"
+        chat=st.secrets.get(
+            "TELEGRAM_CHAT_ID"
         )
 
 
-        password=st.text_input(
-            "Password",
-            type="password"
-        )
+        if token and chat:
 
 
-        if st.button(
-            "Login"
-        ):
+            requests.post(
 
+                f"https://api.telegram.org/bot{token}/sendMessage",
 
-            ok,role=authenticate(
-                username,
-                password
+                json={
+
+                "chat_id":chat,
+
+                "text":message
+
+                }
+
             )
 
 
-            if ok:
+    except Exception as e:
 
-
-                st.session_state.logged=True
-
-                st.session_state.username=username
-
-                st.session_state.role=role
-
-                st.rerun()
-
-
-            else:
-
-                st.error(
-                    "Invalid login"
-                )
-
-
-
-    with tab2:
-
-
-        username=st.text_input(
-            "New Username"
-        )
-
-
-        password=st.text_input(
-            "New Password",
-            type="password"
-        )
-
-
-        email=st.text_input(
-            "Email"
-        )
-
-
-        if st.button(
-            "Create Account"
-        ):
-
-
-            if register(
-                username,
-                password,
-                email
-            ):
-
-                st.success(
-                    "Account created"
-                )
-
-            else:
-
-                st.error(
-                    "Username already exists"
-                )
-
-
-
-
-if not st.session_state.logged:
-
-    login_screen()
-
-    st.stop()
-
-
-
-# ============================================================
-# LOGOUT
-# ============================================================
-
-
-def logout():
-
-    st.session_state.clear()
-
-    st.rerun()
+        logger.error(e)
